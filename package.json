@@ -1,0 +1,28 @@
+{
+  "name": "solanahackathon",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "solana:tx": "tsx src/solanaTxViewer.ts",
+    "evm:tx": "tsx src/evmTxViewer.ts",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@solana/web3.js": "^1.95.8",
+    "@x402/core": "^2.19.0",
+    "@x402/evm": "^2.19.0",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
+    "typescript": "^5.9.3",
+    "vite": "^6.0.7"
+  }
+}

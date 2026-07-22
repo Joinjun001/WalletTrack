@@ -1,1 +1,29 @@
-/pdf
+# 로그 파일
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 외부 의존성 패키지 폴더
+node_modules/
+
+# 개인키 및 환경 변수 (비밀값 유출 방지 - 매우 중요!)
+.env
+.env.local
+.env.*.local
+
+# 빌드 및 산출물 폴더
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# 운영체제(OS) 자동 생성 임시 파일
+.DS_Store
+Thumbs.db
+
+# 에디터 및 개발 툴 설정 폴더
+.vscode/
+.idea/
+
+# 로컬 문서 및 기타 자산
+pdf/
