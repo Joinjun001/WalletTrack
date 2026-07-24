@@ -3,87 +3,62 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sandbox Transaction Explorer (Solana & EVM)</title>
+  <title>Bitcoin Realtime Live Stream</title>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
   <div class="background-glow"></div>
-  
+
   <div class="app-container">
-    <!-- Header -->
-    <header class="header">
-      <div class="logo-area">
-        <span class="badge-tag">SANDBOX EXPLORER</span>
-        <h1>⚡ Transaction Viewer</h1>
+    <!-- Minimalist Bitcoin Price Banner -->
+    <header class="price-header glass-panel">
+      <div class="price-box">
+        <div class="price-label-row">
+          <span class="price-label">BTC / USD</span>
+          <span id="price-live-badge" class="price-live-badge"><span class="badge-dot"></span>LIVE</span>
+        </div>
+        <h1 id="live-btc-price" class="main-btc-price">$00,000.00</h1>
       </div>
-      <p class="subtitle">Solana Devnet 및 EVM Base Sepolia 샌드박스 환경의 트랜잭션을 실시간으로 관찰하세요.</p>
+      <div id="ws-status-dot" class="dot pulsing green hidden-dot"></div>
+      <span id="ws-status-text" class="hidden-txt"></span>
     </header>
 
-    <!-- Navigation Tabs -->
-    <div class="tab-container">
-      <button id="tab-solana" class="tab-btn active">
-        <span class="icon">🟣</span> Solana Devnet (지갑 관찰)
-      </button>
-      <button id="tab-evm" class="tab-btn">
-        <span class="icon">🔵</span> EVM Base Sepolia (Tx 분석)
-      </button>
+    <!-- Controls & Filter Bar -->
+    <div class="control-bar glass-panel">
+      <div class="control-left">
+        <span class="filter-label">거래량 필터:</span>
+        <button class="threshold-btn active" data-threshold="0.1">≥ 0.1 BTC (초고속)</button>
+        <button class="threshold-btn" data-threshold="0.5">≥ 0.5 BTC</button>
+        <button class="threshold-btn" data-threshold="1.0">≥ 1.0 BTC</button>
+        <button class="threshold-btn whale-filter" data-threshold="3.0">🐋 ≥ 3.0 BTC (고래전용)</button>
+      </div>
+
+      <div class="control-right">
+        <span id="live-tx-count" class="count-tag">0 건 감지</span>
+        <span class="vol-label">누적 거래량: <strong id="live-total-vol">0.00 BTC</strong></span>
+      </div>
     </div>
 
-    <!-- Main Content Area -->
-    <main class="main-card glass-panel">
-      <!-- Solana Panel -->
-      <section id="panel-solana" class="panel active">
-        <div class="search-box">
-          <label for="solana-input">Solana Devnet 지갑 주소 (PublicKey)</label>
-          <div class="input-group">
-            <input type="text" id="solana-input" placeholder="예: 11111111111111111111111111111111 또는 지갑주소 입력" value="11111111111111111111111111111111">
-            <button id="btn-search-solana" class="btn-primary">
-              <span class="btn-text">트랜잭션 조회</span>
-              <span class="loader hidden"></span>
-            </button>
-          </div>
-          <div class="quick-chips">
-            <span class="chip-label">Quick Search:</span>
-            <button class="chip" data-sol-addr="11111111111111111111111111111111">System Program</button>
-            <button class="chip" data-sol-addr="TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA">Token Program</button>
-          </div>
+    <!-- Main Live Stream Container -->
+    <main class="stream-section">
+      <div id="live-tx-feed" class="live-feed-list">
+        <div class="empty-feed">
+          <div class="loading-spinner"></div>
+          <p>비트코인 블록체인 실시간 거래 수신 중...</p>
         </div>
-
-        <div id="solana-results" class="results-container">
-          <div class="placeholder-state">
-            <div class="pulse-icon">🔍</div>
-            <p>지갑 주소를 입력하고 [트랜잭션 조회] 버튼을 눌러주세요.</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- EVM Panel -->
-      <section id="panel-evm" class="panel hidden">
-        <div class="search-box">
-          <label for="evm-input">EVM Base Sepolia 트랜잭션 Hash</label>
-          <div class="input-group">
-            <input type="text" id="evm-input" placeholder="0x... 로 시작하는 트랜잭션 해시 입력">
-            <button id="btn-search-evm" class="btn-primary">
-              <span class="btn-text">트랜잭션 조회</span>
-              <span class="loader hidden"></span>
-            </button>
-          </div>
-        </div>
-
-        <div id="evm-results" class="results-container">
-          <div class="placeholder-state">
-            <div class="pulse-icon">🔗</div>
-            <p>EVM 트랜잭션 해시를 입력하면 상세 영수증 정보가 표시됩니다.</p>
-          </div>
-        </div>
-      </section>
+      </div>
     </main>
   </div>
 
-  <script type="module" src="/src/webDashboard.ts"></script>
+  <script type="module">
+    import { initLiveStreamDashboard } from '/src/btcWhaleTracker.ts';
+    document.addEventListener('DOMContentLoaded', () => {
+      initLiveStreamDashboard();
+    });
+  </script>
 </body>
 </html>
