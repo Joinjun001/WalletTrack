@@ -5,12 +5,13 @@
 
 import { analyzeTransaction, escapeHtml } from './txAnalysis.ts';
 import type { RawTx, TxDirection } from './txAnalysis.ts';
+import { prices, updatePrices } from './priceStore.ts';
+import { formatKrwShort, formatSignedPct } from './market.ts';
 
 export interface LiveBtcTransaction {
   id: string;
   hash: string;
   btcAmount: number;
-  usdAmount: number;
   direction: TxDirection;
   timestamp: number;
   exchangeName: string;
@@ -23,8 +24,6 @@ export interface LiveBtcTransaction {
 let ws: WebSocket | null = null;
 let priceWs: WebSocket | null = null;
 let priceWsConnected = false;
-let currentBtcPriceUsd = 65000;
-let lastBtcPriceUsd = 0;
 let minBtcThreshold = 0.1; // 속도감 및 감지 빈도를 높이기 위해 기본값을 0.1 BTC로 변경!
 let txHistory: LiveBtcTransaction[] = [];
 let totalVolumeObservedBtc = 0;
@@ -38,8 +37,8 @@ const WHALE_BTC = 3.0;
  */
 export async function fetchBtcPrice(): Promise<number> {
   const price = (await fetchPriceFromBinance()) ?? (await fetchPriceFromMempool());
-  if (price !== null) currentBtcPriceUsd = price;
-  return currentBtcPriceUsd;
+  if (price !== null) updatePrices({ usdBtc: price });
+  return prices.usdBtc;
 }
 
 async function fetchPriceFromBinance(): Promise<number | null> {
@@ -82,26 +81,22 @@ export function formatBtc(num: number): string {
 /**
  * Connect to Binance Real-Time BTC Price Ticker WebSocket
  */
-function connectPriceWebSocket(priceElem: HTMLElement | null) {
-  const liveBadge = document.getElementById('price-live-badge');
-
+function connectPriceWebSocket() {
   try {
     priceWs = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
 
     priceWs.onopen = () => {
       console.log('⚡ High-Speed Bitcoin Real-Time Price WebSocket Connected');
       priceWsConnected = true;
-      if (liveBadge) liveBadge.classList.add('active');
     };
 
     priceWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data && data.c) {
-          const newPrice = parseFloat(data.c);
-          if (!isNaN(newPrice) && newPrice > 0) {
-            updatePriceUi(priceElem, newPrice);
-          }
+        const newPrice = parseFloat(data?.c);
+        if (newPrice > 0) {
+          const changePct = parseFloat(data.P);
+          updatePrices({ usdBtc: newPrice, usdChangePct: isNaN(changePct) ? null : changePct });
         }
       } catch (e) {
         console.error('Price WS Parse Error:', e);
@@ -111,67 +106,48 @@ function connectPriceWebSocket(priceElem: HTMLElement | null) {
     priceWs.onerror = (err) => {
       console.warn('Price WS Error, attempting reconnect...', err);
       priceWsConnected = false;
-      if (liveBadge) liveBadge.classList.remove('active');
     };
 
     priceWs.onclose = () => {
       console.warn('Price WS Closed, reconnecting in 2 seconds...');
       priceWsConnected = false;
-      if (liveBadge) liveBadge.classList.remove('active');
-      setTimeout(() => connectPriceWebSocket(priceElem), 2000);
+      setTimeout(connectPriceWebSocket, 2000);
     };
   } catch (err) {
     console.error('Price WebSocket Init Error:', err);
   }
 }
 
-/**
- * Real-time update BTC Price UI with instant up/down visual feedback
- */
-function updatePriceUi(priceElem: HTMLElement | null, newPrice: number) {
-  if (priceElem) {
-    if (lastBtcPriceUsd > 0) {
-      if (newPrice > lastBtcPriceUsd) {
-        priceElem.classList.remove('price-down');
-        priceElem.classList.add('price-up');
-        setTimeout(() => priceElem.classList.remove('price-up'), 600);
-      } else if (newPrice < lastBtcPriceUsd) {
-        priceElem.classList.remove('price-up');
-        priceElem.classList.add('price-down');
-        setTimeout(() => priceElem.classList.remove('price-down'), 600);
-      }
-    }
-    priceElem.textContent = formatUsd(newPrice, true);
+function renderUsdPrice() {
+  const priceElem = document.getElementById('usd-btc-price');
+  if (priceElem && prices.usdBtc > 0) priceElem.textContent = formatUsd(prices.usdBtc, true);
+  const changeElem = document.getElementById('usd-change');
+  if (changeElem && prices.usdChangePct !== null) {
+    changeElem.textContent = formatSignedPct(prices.usdChangePct);
+    changeElem.classList.toggle('up', prices.usdChangePct > 0);
+    changeElem.classList.toggle('down', prices.usdChangePct < 0);
   }
-  lastBtcPriceUsd = newPrice;
-  currentBtcPriceUsd = newPrice;
 }
 
 /**
  * Initialize Dashboard Engine
  */
 export async function initLiveStreamDashboard() {
-  const priceElem = document.getElementById('live-btc-price');
   const feedContainer = document.getElementById('live-tx-feed');
   const countElem = document.getElementById('live-tx-count');
   const totalVolElem = document.getElementById('live-total-vol');
 
   // Fetch initial BTC Price
-  const initialPrice = await fetchBtcPrice();
-  if (priceElem) {
-    priceElem.textContent = formatUsd(initialPrice, true);
-    lastBtcPriceUsd = initialPrice;
-  }
+  await fetchBtcPrice();
+  renderUsdPrice();
 
   // Connect Real-Time Price Stream WebSocket
-  connectPriceWebSocket(priceElem);
+  connectPriceWebSocket();
+  setInterval(renderUsdPrice, 1000); // 틱마다 다시 그리지 않고 1초 단위로 표시
 
   // Periodic REST fallback every 20s if WebSocket disconnected
-  setInterval(async () => {
-    if (!priceWsConnected) {
-      const p = await fetchBtcPrice();
-      updatePriceUi(priceElem, p);
-    }
+  setInterval(() => {
+    if (!priceWsConnected) fetchBtcPrice();
   }, 20000);
 
   // Filter Buttons
@@ -244,7 +220,6 @@ function processTransaction(txData: RawTx, container: HTMLElement | null, countE
     id: hash.substring(0, 10),
     hash,
     btcAmount,
-    usdAmount: btcAmount * currentBtcPriceUsd,
     direction,
     timestamp: Date.now(),
     exchangeName: exchange ? exchange.name : '미확인 지갑',
@@ -291,6 +266,10 @@ function prependItemToUi(container: HTMLElement | null, item: LiveBtcTransaction
   const card = document.createElement('div');
   card.className = `live-tx-card ${item.direction} ${item.isWhale ? 'whale-alert' : ''}`;
 
+  // 원화/달러 환산은 카드를 그리는 시점의 시세 기준
+  const krwText = prices.krwBtc > 0 ? `≈ ${formatKrwShort(item.btcAmount * prices.krwBtc)}` : '';
+  const usdText = prices.usdBtc > 0 ? formatUsd(item.btcAmount * prices.usdBtc, false) : '';
+
   card.innerHTML = `
     <div class="tx-left">
       <div class="tx-type-row">
@@ -311,9 +290,8 @@ function prependItemToUi(container: HTMLElement | null, item: LiveBtcTransaction
       <div class="tx-amount-btc">
         ${formatBtc(item.btcAmount)}
       </div>
-      <div class="tx-amount-usd">
-        ≈ ${formatUsd(item.usdAmount)}
-      </div>
+      <div class="tx-amount-krw">${krwText}</div>
+      <div class="tx-amount-usd">${usdText}</div>
     </div>
   `;
 

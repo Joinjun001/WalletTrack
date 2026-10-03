@@ -1,6 +1,6 @@
 # ⚡ 고래 지갑 추적기 (Bitcoin Real-Time Whale Tracker)
 
-고래 지갑 추적기는 **비트코인(BTC) 실시간 트랜잭션 수신**, **고래(Whale) 이동 감지**, 및 **실시간 비트코인 시세 스트리밍**을 제공하는 초고속 Web3 트래커 웹 애플리케이션입니다.
+고래 지갑 추적기는 **비트코인(BTC) 실시간 트랜잭션 수신**, **고래(Whale) 이동 감지**, **원화 시세·김치 프리미엄**, **네트워크 현황**을 한 화면에 보여 주는 한국 사용자용 실시간 대시보드입니다.
 
 🔗 **Vercel 라이브 데모**: [https://wallet-track-e2ze8d2py-joinjun001s-projects.vercel.app](https://wallet-track-e2ze8d2py-joinjun001s-projects.vercel.app/)
 
@@ -9,6 +9,8 @@
 ## 📸 프로젝트 화면 (Screenshot)
 
 ![고래 지갑 추적기 스크린샷](image/image1.png)
+
+<img src="image/mobile.png" alt="모바일 화면" width="280">
 
 ---
 
@@ -20,7 +22,19 @@
 - **실제 이동 금액 계산**: 보낸 주소로 되돌아오는 거스름돈(change) 출력은 금액에서 뺍니다. 거래소 입금은 거래소 주소로 간 금액만 셉니다.
 - **고래(Whale) 임계값 필터링**: `≥ 0.1 BTC`, `≥ 0.5 BTC`, `≥ 1.0 BTC`, `🐋 ≥ 3.0 BTC` 버튼으로 원하시는 규모의 트랜잭션만 즉시 필터링할 수 있습니다. 필터를 바꿔도 0.1 BTC 이상 최근 거래 기록은 유지됩니다.
 
-### 2. 실시간 비트코인 시세
+### 2. 원화 시세 & 시장 지표 (상단 바)
+- **업비트 원화 시세 (`wss://api.upbit.com/websocket/v1`)**: KRW-BTC 실시간 가격과 전일 대비 등락률(오전 9시 기준)
+- **김치 프리미엄**: `업비트 원화 가격 ÷ (해외 달러 가격 × 업비트 USDT 원화 가격) - 1`. 환율 대신 업비트 USDT 가격을 쓰므로 테더 프리미엄만큼 오차가 있습니다.
+- **BTC/USD 24시간 변동률**, **공포·탐욕 지수** (alternative.me, 1시간마다 갱신)
+
+### 3. 네트워크 현황 (사이드 패널, mempool.space, 30초마다 갱신)
+- **추천 수수료** (빠름 / 30분 / 1시간, sat/vB)
+- **최근 블록** (높이, 채굴 풀, 거래 수, 경과 시간)
+- **다음 반감기 카운트다운** (남은 블록, 10분/블록 기준 예상 일수)
+- **오늘 고가/저가** (업비트 원화)
+- 모바일에서는 패널이 피드 위의 가로 스크롤 카드로 바뀝니다.
+
+### 4. 실시간 비트코인 달러 시세
 - **초단위 시세 스트리밍 (`wss://stream.binance.com:9443/ws/btcusdt@ticker`)**: 1초 미만(틱 단위)으로 바이낸스 기준 비트코인 가격 변경을 감지합니다.
 - **실시간 Visual Glow 애니메이션**:
   - 가격 상승 시 🟢 초록색 글로우 펄스 이펙트 (`price-up`)
@@ -33,7 +47,8 @@
 
 - **Frontend**: Vite, TypeScript, Vanilla CSS (Glassmorphism Modern Dark UI)
 - **Fonts**: Google Fonts (Outfit, JetBrains Mono)
-- **Real-Time Engine**: WebSocket (Blockchain.info Mempool API, Binance Market Ticker API), 시세 REST 폴백 (Binance → mempool.space)
+- **Real-Time Engine**: WebSocket (Blockchain.info Mempool API, Binance Market Ticker API, Upbit Ticker), 시세 REST 폴백 (Binance → mempool.space)
+- **Data APIs**: mempool.space (수수료·블록), alternative.me (공포·탐욕 지수) — 모두 키 없이 브라우저에서 직접 호출
 - **Deployment**: Vercel
 
 ---
@@ -73,12 +88,19 @@ npm run dev
 WalletTrack/
 ├── index.html                # 메인 대시보드 HTML
 ├── image/
-│   └── image1.png            # 프로젝트 스크린샷 이미지
+│   ├── image1.png            # 데스크톱 스크린샷
+│   └── mobile.png            # 모바일 스크린샷
 ├── src/
-│   ├── btcWhaleTracker.ts    # 비트코인 Mempool & Binance 시세 WebSocket 엔진 (DOM)
+│   ├── main.ts               # 진입점: 각 패널 초기화
+│   ├── btcWhaleTracker.ts    # 고래 피드 (blockchain.info) & Binance 달러 시세
+│   ├── krMarket.ts           # 업비트 원화 시세, 김치 프리미엄, 공포·탐욕 지수
+│   ├── networkPanel.ts       # 수수료, 최근 블록, 반감기 (mempool.space)
+│   ├── priceStore.ts         # 패널 간 공유 시세 상태
+│   ├── market.ts             # 김프/반감기/원화 포맷 순수 로직
 │   ├── txAnalysis.ts         # 금액/입출금 판정 순수 로직 & 거래소 지갑 목록
-│   └── style.css             # Glassmorphism 디자인 시스템 & 애니메이션
+│   └── style.css             # Glassmorphism 디자인 시스템 & 반응형 레이아웃
 ├── tests/
+│   ├── market.test.ts        # 시세/네트워크 계산 테스트
 │   └── txAnalysis.test.ts    # 분석 로직 테스트
 ├── package.json
 ├── vite.config.ts

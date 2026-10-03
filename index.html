@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bitcoin Realtime Live Stream</title>
+  <title>고래 지갑 추적기 · 비트코인 실시간</title>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,51 +14,95 @@
   <div class="background-glow"></div>
 
   <div class="app-container">
-    <!-- Minimalist Bitcoin Price Banner -->
+    <!-- Price Bar: 원화 시세 + 보조 지표 -->
     <header class="price-header glass-panel">
       <div class="price-box">
         <div class="price-label-row">
-          <span class="price-label">BTC / USD</span>
+          <span class="price-label">BTC / KRW · 업비트</span>
           <span id="price-live-badge" class="price-live-badge"><span class="badge-dot"></span>LIVE</span>
         </div>
-        <h1 id="live-btc-price" class="main-btc-price">$00,000.00</h1>
-      </div>
-      <div id="ws-status-dot" class="dot pulsing green hidden-dot"></div>
-      <span id="ws-status-text" class="hidden-txt"></span>
-    </header>
-
-    <!-- Controls & Filter Bar -->
-    <div class="control-bar glass-panel">
-      <div class="control-left">
-        <span class="filter-label">거래량 필터:</span>
-        <button class="threshold-btn active" data-threshold="0.1">≥ 0.1 BTC (초고속)</button>
-        <button class="threshold-btn" data-threshold="0.5">≥ 0.5 BTC</button>
-        <button class="threshold-btn" data-threshold="1.0">≥ 1.0 BTC</button>
-        <button class="threshold-btn whale-filter" data-threshold="3.0">🐋 ≥ 3.0 BTC (고래전용)</button>
-      </div>
-
-      <div class="control-right">
-        <span id="live-tx-count" class="count-tag">0 건 감지</span>
-        <span class="vol-label">누적 거래량: <strong id="live-total-vol">0.00 BTC</strong></span>
-      </div>
-    </div>
-
-    <!-- Main Live Stream Container -->
-    <main class="stream-section">
-      <div id="live-tx-feed" class="live-feed-list">
-        <div class="empty-feed">
-          <div class="loading-spinner"></div>
-          <p>비트코인 블록체인 실시간 거래 수신 중...</p>
+        <div class="main-price-row">
+          <h1 id="krw-btc-price" class="main-btc-price">-</h1>
+          <span id="krw-change" class="main-change" title="전일 대비 (오전 9시 기준)">-</span>
         </div>
       </div>
-    </main>
+
+      <div class="header-stats">
+        <div class="stat">
+          <span class="stat-label">BTC / USD</span>
+          <span class="stat-value"><span id="usd-btc-price">-</span> <span id="usd-change" class="stat-sub" title="24시간 변동">-</span></span>
+        </div>
+        <div class="stat">
+          <span class="stat-label" title="업비트 원화 가격 ÷ (해외 달러 가격 × 업비트 USDT 가격) - 1">김치 프리미엄</span>
+          <span id="kimchi-premium" class="stat-value">-</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">공포·탐욕 지수</span>
+          <span id="fear-greed" class="stat-value">-</span>
+        </div>
+      </div>
+    </header>
+
+    <div class="dashboard">
+      <!-- 고래 피드 -->
+      <section class="feed-column">
+        <div class="control-bar glass-panel">
+          <div class="control-left">
+            <span class="filter-label">거래량 필터:</span>
+            <button class="threshold-btn active" data-threshold="0.1">≥ 0.1 BTC</button>
+            <button class="threshold-btn" data-threshold="0.5">≥ 0.5 BTC</button>
+            <button class="threshold-btn" data-threshold="1.0">≥ 1.0 BTC</button>
+            <button class="threshold-btn whale-filter" data-threshold="3.0">🐋 ≥ 3.0 BTC</button>
+          </div>
+
+          <div class="control-right">
+            <span id="live-tx-count" class="count-tag">0 건 감지</span>
+            <span class="vol-label">누적: <strong id="live-total-vol">0.00 BTC</strong></span>
+          </div>
+        </div>
+
+        <main class="stream-section">
+          <div id="live-tx-feed" class="live-feed-list">
+            <div class="empty-feed">
+              <div class="loading-spinner"></div>
+              <p>비트코인 블록체인 실시간 거래 수신 중...</p>
+            </div>
+          </div>
+        </main>
+      </section>
+
+      <!-- 네트워크 & 시장 패널 -->
+      <aside class="side-column">
+        <div class="info-card glass-panel">
+          <h2 class="info-title">⛽ 추천 수수료 <span class="info-unit">sat/vB</span></h2>
+          <div class="fee-grid">
+            <div><span class="fee-label">빠름</span><strong id="fee-fast">-</strong></div>
+            <div><span class="fee-label">30분</span><strong id="fee-half">-</strong></div>
+            <div><span class="fee-label">1시간</span><strong id="fee-hour">-</strong></div>
+          </div>
+        </div>
+
+        <div class="info-card glass-panel">
+          <h2 class="info-title">🧱 최근 블록 <span id="block-time" class="info-unit">-</span></h2>
+          <div class="info-main" id="block-height">-</div>
+          <div class="info-sub"><span id="block-pool">-</span> · <span id="block-txs">-</span></div>
+        </div>
+
+        <div class="info-card glass-panel">
+          <h2 class="info-title">⏳ 다음 반감기</h2>
+          <div class="info-main" id="halving-days">-</div>
+          <div class="info-sub" id="halving-blocks">-</div>
+        </div>
+
+        <div class="info-card glass-panel">
+          <h2 class="info-title">📊 오늘 시세 <span class="info-unit">업비트 9시 기준</span></h2>
+          <div class="range-row"><span class="fee-label">고가</span><strong id="krw-high" class="up">-</strong></div>
+          <div class="range-row"><span class="fee-label">저가</span><strong id="krw-low" class="down">-</strong></div>
+        </div>
+      </aside>
+    </div>
   </div>
 
-  <script type="module">
-    import { initLiveStreamDashboard } from '/src/btcWhaleTracker.ts';
-    document.addEventListener('DOMContentLoaded', () => {
-      initLiveStreamDashboard();
-    });
-  </script>
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
