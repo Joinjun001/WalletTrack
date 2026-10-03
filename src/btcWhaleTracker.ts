@@ -3,8 +3,8 @@
  * Extreme Speed WebSocket Engine with Exchange Address Matching
  */
 
-import { analyzeTransaction, escapeHtml, KNOWN_EXCHANGES } from './txAnalysis.ts';
-import type { ExchangeWallet, RawTx, TxDirection } from './txAnalysis.ts';
+import { analyzeTransaction, escapeHtml, fromMempoolTx, KNOWN_EXCHANGES } from './txAnalysis.ts';
+import type { ExchangeWallet, MempoolTx, RawTx, TxDirection } from './txAnalysis.ts';
 import { prices, updatePrices } from './priceStore.ts';
 import { formatKrwShort, formatSignedPct } from './market.ts';
 import { getHistory } from './historyApi.ts';
@@ -208,30 +208,31 @@ function toLiveTx(hash: string, btcAmount: number, direction: TxDirection, excha
   };
 }
 
+// 서버 수집기와 같은 출처. blockchain.info(wss://ws.blockchain.info/inv)는 2026-10 기준 502로 연결되지 않는다
+const MEMPOOL_WS = 'wss://mempool.space/api/v1/ws';
+
 /**
- * Connect to Blockchain.info WebSocket (Instant Mempool Unconfirmed Transactions)
+ * Connect to mempool.space WebSocket (새로 들어온 미확인 거래)
  */
 function connectWebSocket(container: HTMLElement | null, countElem: HTMLElement | null, totalVolElem: HTMLElement | null) {
   const statusDot = document.getElementById('ws-status-dot');
 
   try {
-    ws = new WebSocket('wss://ws.blockchain.info/inv');
+    ws = new WebSocket(MEMPOOL_WS);
 
     ws.onopen = () => {
       console.log('⚡ High-Speed Bitcoin Transaction WebSocket Connected');
       if (statusDot) statusDot.className = 'dot pulsing green';
 
-      // Subscribe to all unconfirmed mempool transactions immediately
-      ws?.send(JSON.stringify({ op: 'unconfirmed_sub' }));
+      // 멤풀에 새로 들어온 거래를 받는다
+      ws?.send(JSON.stringify({ 'track-mempool': true }));
     };
 
     ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
-        if (data.op === 'utx' && data.x) {
-          // Instant processing without delay
-          processTransaction(data.x, container, countElem, totalVolElem);
-        }
+        const added: MempoolTx[] | undefined = JSON.parse(event.data)?.['mempool-transactions']?.added;
+        if (!added) return;
+        for (const tx of added) processTransaction(fromMempoolTx(tx), container, countElem, totalVolElem);
       } catch (e) {
         console.error('WS Parse Error:', e);
       }
@@ -245,7 +246,7 @@ function connectWebSocket(container: HTMLElement | null, countElem: HTMLElement 
     ws.onclose = () => {
       console.warn('WS Closed, reconnecting instantly...');
       if (statusDot) statusDot.className = 'dot yellow';
-      setTimeout(() => connectWebSocket(container, countElem, totalVolElem), 1500);
+      setTimeout(() => connectWebSocket(container, countElem, totalVolElem), 3000);
     };
   } catch (err) {
     console.error('WebSocket Init Error:', err);

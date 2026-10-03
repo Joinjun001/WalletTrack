@@ -17,7 +17,7 @@
 ## ✨ 핵심 기능
 
 ### 1. 실시간 비트코인 트랜잭션 감지
-- **WebSocket 연동 (`wss://ws.blockchain.info/inv`)**: 비트코인 블록체인에서 생성되는 미확인(Unconfirmed) Mempool 트랜잭션을 딜레이 없이 실시간으로 수신합니다.
+- **WebSocket 연동 (`wss://mempool.space/api/v1/ws`)**: 비트코인 블록체인에서 생성되는 미확인(Unconfirmed) Mempool 트랜잭션을 딜레이 없이 실시간으로 수신합니다.
 - **거래소 지갑 태깅 (입금/출금)**: 바이낸스(Binance), 코인베이스(Coinbase), 비트파이넥스(Bitfinex)의 공개 라벨 지갑을 감지합니다. 거래소 지갑으로 들어가면 📥 **거래소 입금**(빨강), 거래소 지갑에서 나오면 📤 **거래소 출금**(초록), 그 외는 ↔️ **전송**(회색)으로 표시합니다.
 - **실제 이동 금액 계산**: 보낸 주소로 되돌아오는 거스름돈(change) 출력은 금액에서 뺍니다. 거래소 입금은 거래소 주소로 간 금액만 셉니다.
 - **고래(Whale) 임계값 필터링**: `≥ 0.1 BTC`, `≥ 0.5 BTC`, `≥ 1.0 BTC`, `🐋 ≥ 3.0 BTC` 버튼으로 원하시는 규모의 트랜잭션만 즉시 필터링할 수 있습니다. 필터를 바꿔도 0.1 BTC 이상 최근 거래 기록은 유지됩니다.
@@ -113,7 +113,7 @@ WalletTrack/
 │   └── mobile.png            # 모바일 스크린샷
 ├── src/
 │   ├── main.ts               # 진입점: 탭 전환 & 각 패널 초기화
-│   ├── btcWhaleTracker.ts    # 고래 피드 (blockchain.info) & Binance 달러 시세
+│   ├── btcWhaleTracker.ts    # 고래 피드 (mempool.space) & Binance 달러 시세
 │   ├── krMarket.ts           # 업비트 원화 시세(WebSocket 공유), 김치 프리미엄, 공포·탐욕 지수
 │   ├── priceChart.ts         # 업비트 캔들 차트
 │   ├── coins.ts              # 시세 표에 보여 줄 코인 목록
