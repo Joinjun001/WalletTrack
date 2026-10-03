@@ -1,5 +1,7 @@
 /**
  * 왼쪽 코인 사이드바: 업비트 원화 마켓 전체를 검색·정렬(거래대금/상승/하락)해서 보여주고, 누르면 가운데 차트가 그 코인으로 바뀐다.
+ * 코인마다 오늘 일봉을 축소한 미니 캔들을 그린다 (업비트 목록처럼). 모든 코인을 시가 기준 ±15% 같은 눈금으로 그려서
+ * 크게 움직인 코인일수록 막대가 꽉 차 보인다.
  * 가격은 업비트 실시간 시세(WebSocket)로 갱신한다. 줄 순서는 정렬·검색을 바꿀 때와 주기적으로만 다시 매긴다 (누르려는 줄이 움직이지 않게).
  */
 
@@ -15,6 +17,7 @@ import { track } from './analytics.ts';
 const UPBIT_MARKETS = 'https://api.upbit.com/v1/market/all?isDetails=false';
 const UPBIT_TICKER_ALL = 'https://api.upbit.com/v1/ticker/all?quote_currencies=KRW';
 const RESORT_MS = 30 * 1000;
+const MINI_CANDLE_RANGE = 0.15; // 미니 캔들 위아래 끝 = 시가 대비 ±15%
 
 type SortMode = 'volume' | 'up' | 'down';
 
@@ -26,6 +29,9 @@ interface Row {
   price: number;
   changePct: number | null;
   volume24h: number; // 원화 거래대금
+  open: number;      // 오늘 시가·고가·저가 (미니 캔들)
+  high: number;
+  low: number;
 }
 
 const rows = new Map<string, Row>();
@@ -47,6 +53,31 @@ function sorted(): Row[] {
   return list.sort((a, b) => (sortMode === 'up' ? pct(b) - pct(a) : pct(a) - pct(b)));
 }
 
+/** 시가 대비 가격을 미니 캔들 세로 위치(위에서 %)로. ±15% 밖은 끝에 붙인다 */
+function candleY(price: number, open: number): number {
+  const change = Math.max(-MINI_CANDLE_RANGE, Math.min(MINI_CANDLE_RANGE, price / open - 1));
+  return ((MINI_CANDLE_RANGE - change) / (2 * MINI_CANDLE_RANGE)) * 100;
+}
+
+/** 꼬리(저가~고가)와 몸통(시가~현재가)의 위치. 시세를 아직 모르면 null */
+function miniCandleStyle(row: Row) {
+  if (!(row.open > 0 && row.price > 0)) return null;
+  const top = (a: number, b: number) => Math.min(candleY(a, row.open), candleY(b, row.open));
+  const height = (a: number, b: number) => Math.abs(candleY(a, row.open) - candleY(b, row.open));
+  return {
+    rising: row.price >= row.open,
+    wick: `top:${top(row.high, row.low).toFixed(1)}%;height:${height(row.high, row.low).toFixed(1)}%`,
+    // 거의 안 움직였어도 가는 선은 보이게
+    body: `top:${top(row.open, row.price).toFixed(1)}%;height:max(1px,${height(row.open, row.price).toFixed(1)}%)`
+  };
+}
+
+function miniCandleHtml(row: Row): string {
+  const s = miniCandleStyle(row);
+  if (!s) return '<span class="mini-candle" aria-hidden="true"></span>';
+  return `<span class="mini-candle ${s.rising ? 'up' : 'down'}" aria-hidden="true"><i class="mc-wick" style="${s.wick}"></i><i class="mc-body" style="${s.body}"></i></span>`;
+}
+
 function toneClass(pct: number | null): string {
   return pct === null || pct === 0 ? '' : pct > 0 ? 'up' : 'down';
 }
@@ -60,6 +91,7 @@ function renderList() {
     ? '<li class="coin-list-empty">검색 결과가 없어요</li>'
     : items.map((r) => `
       <li class="coin-row${r.symbol === selected ? ' selected' : ''}" data-market="${escapeHtml(r.market)}" data-symbol="${escapeHtml(r.symbol)}">
+        ${miniCandleHtml(r)}
         <span class="coin-row-name"><strong>${escapeHtml(r.ko)}</strong><span>${escapeHtml(r.symbol)}</span></span>
         <span class="coin-row-quote">
           <span class="coin-row-price ${toneClass(r.changePct)}" data-col="price">${r.price > 0 ? formatKrwPrice(r.price) : '-'}</span>
@@ -95,17 +127,26 @@ function queueCellUpdate(market: string) {
         change.className = tone;
       }
       if (volume) volume.textContent = formatKrwShort(row.volume24h);
+      const candle = li.querySelector('.mini-candle');
+      if (candle) candle.outerHTML = miniCandleHtml(row);
     }
     dirty.clear();
   });
 }
 
-function applyTicker(market: string, t: UpbitTicker) {
-  const row = rows.get(market);
-  if (!row) return;
+function setQuote(row: Row, t: UpbitTicker) {
   row.price = t.trade_price;
   row.changePct = t.signed_change_rate * 100;
   row.volume24h = t.acc_trade_price_24h;
+  row.open = t.opening_price;
+  row.high = t.high_price;
+  row.low = t.low_price;
+}
+
+function applyTicker(market: string, t: UpbitTicker) {
+  const row = rows.get(market);
+  if (!row) return;
+  setQuote(row, t);
   queueCellUpdate(market);
 }
 
@@ -174,15 +215,12 @@ export async function initCoinSidebar() {
   for (const m of markets) {
     if (!m.market.startsWith('KRW-')) continue;
     const symbol = m.market.slice(4);
-    rows.set(m.market, { market: m.market, symbol, ko: m.korean_name, en: m.english_name, price: 0, changePct: null, volume24h: 0 });
+    rows.set(m.market, { market: m.market, symbol, ko: m.korean_name, en: m.english_name, price: 0, changePct: null, volume24h: 0, open: 0, high: 0, low: 0 });
   }
   setCoinNames([...rows.values()].map((r) => [r.symbol, r.ko] as [string, string]));
   for (const t of tickers ?? []) {
     const row = t.market ? rows.get(t.market) : undefined;
-    if (!row) continue;
-    row.price = t.trade_price;
-    row.changePct = t.signed_change_rate * 100;
-    row.volume24h = t.acc_trade_price_24h;
+    if (row) setQuote(row, t);
   }
   renderList();
 

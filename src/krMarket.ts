@@ -23,6 +23,7 @@ export interface UpbitTicker {
   code?: string;   // WebSocket
   trade_price: number;
   signed_change_rate: number;
+  opening_price: number; // 오늘(오전 9시) 시가
   high_price: number;
   low_price: number;
   acc_trade_price_24h: number;

@@ -10,11 +10,9 @@ import { formatFundingRate, formatSignedPct, KST_OFFSET_SEC } from './market.ts'
 import { getHistory } from './historyApi.ts';
 import type { FuturesPoint, KimchiPoint } from './historyApi.ts';
 import { track } from './analytics.ts';
-import { registerThemedChart } from './theme.ts';
+import { marketColors, onMarketColorsChange, registerThemedChart } from './theme.ts';
 
 const REFRESH_MS = 60 * 1000;
-const UP_COLOR = '#00E676';
-const DOWN_COLOR = '#FF5252';
 const LINE_COLOR = '#F7931A';
 
 interface Point {
@@ -22,12 +20,25 @@ interface Point {
   value: number;
 }
 
-type SeriesKind = 'baseline' | 'line'; // baseline: 0 위는 초록, 아래는 빨강
+type SeriesKind = 'baseline' | 'line'; // baseline: 0 위는 상승색, 아래는 하락색
 
 interface Metric {
   kind: SeriesKind;
   format: (v: number) => string;
   minMove: number;
+}
+
+/** 0 위는 상승색, 아래는 하락색 (상승·하락 색 설정을 따른다) */
+function baselineColors() {
+  const c = marketColors();
+  return {
+    topLineColor: c.up,
+    topFillColor1: c.upAlpha(0.25),
+    topFillColor2: c.upAlpha(0.02),
+    bottomLineColor: c.down,
+    bottomFillColor1: c.downAlpha(0.02),
+    bottomFillColor2: c.downAlpha(0.25)
+  };
 }
 
 /** 차트 하나 + 상태 문구. 기간/종목을 바꾸면 load를 다시 부른다 */
@@ -44,6 +55,9 @@ class HistoryChart {
       localization: { locale: 'ko-KR' }
     });
     registerThemedChart(this.chart);
+    onMarketColorsChange(() => {
+      if (this.series && this.seriesKey.startsWith('baseline')) this.series.applyOptions(baselineColors());
+    });
     this.status = document.getElementById(statusId);
   }
 
@@ -58,12 +72,7 @@ class HistoryChart {
     this.series = metric.kind === 'baseline'
       ? this.chart.addSeries(BaselineSeries, {
           baseValue: { type: 'price', price: 0 },
-          topLineColor: UP_COLOR,
-          topFillColor1: 'rgba(0, 230, 118, 0.25)',
-          topFillColor2: 'rgba(0, 230, 118, 0.02)',
-          bottomLineColor: DOWN_COLOR,
-          bottomFillColor1: 'rgba(255, 82, 82, 0.02)',
-          bottomFillColor2: 'rgba(255, 82, 82, 0.25)',
+          ...baselineColors(),
           lineWidth: 2,
           priceFormat
         })

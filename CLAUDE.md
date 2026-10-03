@@ -34,6 +34,8 @@
 
 ## 커밋·배포
 
+- **작업이 끝나면 확인 질문 없이 커밋하고 `main`에 푸시해 배포까지 마친다** (사용자 요청, 2026-10-04). 서버 코드를 바꿨으면 `docker compose up -d --build`로 서버도 반영한다.
+
 - 이 서버에는 git 작성자가 설정돼 있지 않다: `git -c user.name=joinjun001 -c user.email=109087027+Joinjun001@users.noreply.github.com commit ...`
 - 작업 브랜치 `feat/market-tools`와 `main`이 같은 커밋을 가리키게 둘 다 푸시한다 (`git push origin HEAD:main && git push origin HEAD`).
 - 푸시 후 실제 사이트에 반영됐는지 확인한다.

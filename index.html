@@ -5,12 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark light">
   <script>
-    // 첫 화면부터 테마를 맞춘다 (src/theme.ts와 같은 키). 고른 적이 없으면 시스템 설정을 따른다
+    // 첫 화면부터 테마·색을 맞춘다 (src/theme.ts와 같은 키). 테마는 고른 적이 없으면 시스템 설정을 따른다
     (function () {
       var theme = null;
       try { theme = localStorage.getItem('wallettrack.theme'); } catch (e) {}
       if (theme !== 'light' && theme !== 'dark') theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
       document.documentElement.dataset.theme = theme;
+      // 상승·하락 색: 기본 국내식(빨강↑ 파랑↓), 'global'이면 해외식(초록↑ 빨강↓)
+      var colors = null;
+      try { colors = localStorage.getItem('wallettrack.colors'); } catch (e) {}
+      document.documentElement.dataset.colors = colors === 'global' ? 'global' : 'kr';
     })();
   </script>
   <title>고래 지갑 추적기 · 비트코인 실시간</title>
@@ -26,6 +30,7 @@
   <div class="app-container">
     <!-- Price Bar: 원화 시세 + 보조 지표 -->
     <header class="price-header glass-panel">
+      <button id="color-toggle" type="button" class="theme-toggle color-toggle" aria-label="상승·하락 색 바꾸기"><span class="up">▲</span><span class="down">▼</span></button>
       <button id="theme-toggle" type="button" class="theme-toggle" aria-label="테마 바꾸기">☀️</button>
       <div class="price-box">
         <div class="price-label-row">

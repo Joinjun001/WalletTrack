@@ -11,7 +11,7 @@ import { applyTick, candleTimeOf, krwPricePrecision, KST_OFFSET_SEC } from './ma
 import type { Candle } from './market.ts';
 import { track } from './analytics.ts';
 import { getUpbit } from './historyApi.ts';
-import { chartThemeOptions, registerThemedChart } from './theme.ts';
+import { chartThemeOptions, marketColors, onMarketColorsChange, registerThemedChart } from './theme.ts';
 
 const UPBIT_CANDLES = 'https://api.upbit.com/v1/candles';
 const CANDLE_COUNT = 200;
@@ -25,9 +25,6 @@ const INTERVALS: Record<string, { path: string; seconds: number }> = {
   '1h': { path: 'minutes/60', seconds: 3600 },
   '1d': { path: 'days', seconds: 86400 }
 };
-
-const UP_COLOR = '#00E676';
-const DOWN_COLOR = '#FF5252';
 
 interface UpbitCandle {
   candle_date_time_utc: string; // "2026-10-03T12:00:00"
@@ -59,12 +56,32 @@ function toCandle(c: UpbitCandle): Candle {
   };
 }
 
+const VOLUME_ALPHA = 0.35;
+
+function volumeColor(rising: boolean): string {
+  const colors = marketColors();
+  return rising ? colors.upAlpha(VOLUME_ALPHA) : colors.downAlpha(VOLUME_ALPHA);
+}
+
 function volumeBar(c: UpbitCandle, time: number) {
   return {
     time: time as UTCTimestamp,
     value: c.candle_acc_trade_volume,
-    color: c.trade_price >= c.opening_price ? 'rgba(0, 230, 118, 0.35)' : 'rgba(255, 82, 82, 0.35)'
+    color: volumeColor(c.trade_price >= c.opening_price)
   };
+}
+
+function candleColors() {
+  const { up, down } = marketColors();
+  return { upColor: up, downColor: down, wickUpColor: up, wickDownColor: down };
+}
+
+/** 상승·하락 색 설정이 바뀌면 캔들과 거래량 막대를 다시 칠한다 */
+function recolor() {
+  if (!candleSeries || !volumeSeries) return;
+  candleSeries.applyOptions(candleColors());
+  const rising = new Map(candleSeries.data().map((c) => [c.time, 'close' in c && c.close >= c.open]));
+  volumeSeries.setData(volumeSeries.data().map((v) => ({ ...v, color: volumeColor(rising.get(v.time) ?? true) })));
 }
 
 /** to: 이 시각(UTC, 미포함) 이전 캔들. 없으면 최신 캔들 */
@@ -194,15 +211,11 @@ export function initPriceChart() {
 
   registerThemedChart(chart);
 
-  candleSeries = chart.addSeries(CandlestickSeries, {
-    upColor: UP_COLOR,
-    downColor: DOWN_COLOR,
-    wickUpColor: UP_COLOR,
-    wickDownColor: DOWN_COLOR,
-    borderVisible: false
-  });
+  candleSeries = chart.addSeries(CandlestickSeries, { ...candleColors(), borderVisible: false });
   volumeSeries = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' });
   volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+
+  onMarketColorsChange(recolor);
 
   chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
     if (range && range.from < LOAD_OLDER_MARGIN) loadOlderCandles();
