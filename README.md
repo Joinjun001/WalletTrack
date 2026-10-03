@@ -16,8 +16,9 @@
 
 ### 1. 실시간 비트코인 트랜잭션 감지
 - **WebSocket 연동 (`wss://ws.blockchain.info/inv`)**: 비트코인 블록체인에서 생성되는 미확인(Unconfirmed) Mempool 트랜잭션을 딜레이 없이 실시간으로 수신합니다.
-- **주요 글로벌 거래소 핫월렛 태깅**: 바이낸스(Binance), 코인베이스(Coinbase), 비트파이넥스(Bitfinex), 로빈후드(Robinhood), OKX, 크라켄(Kraken) 등 유명 거래소의 핫 월렛(Hot Wallet)을 실시간으로 감지하고 매수/매도 라벨을 표시합니다.
-- **고래(Whale) 임계값 필터링**: `≥ 0.1 BTC`, `≥ 0.5 BTC`, `≥ 1.0 BTC`, `🐋 ≥ 3.0 BTC` 버튼으로 원하시는 규모의 트랜잭션만 즉시 필터링할 수 있습니다.
+- **거래소 지갑 태깅 (입금/출금)**: 바이낸스(Binance), 코인베이스(Coinbase), 비트파이넥스(Bitfinex)의 공개 라벨 지갑을 감지합니다. 거래소 지갑으로 들어가면 📥 **거래소 입금**(빨강), 거래소 지갑에서 나오면 📤 **거래소 출금**(초록), 그 외는 ↔️ **전송**(회색)으로 표시합니다.
+- **실제 이동 금액 계산**: 보낸 주소로 되돌아오는 거스름돈(change) 출력은 금액에서 뺍니다. 거래소 입금은 거래소 주소로 간 금액만 셉니다.
+- **고래(Whale) 임계값 필터링**: `≥ 0.1 BTC`, `≥ 0.5 BTC`, `≥ 1.0 BTC`, `🐋 ≥ 3.0 BTC` 버튼으로 원하시는 규모의 트랜잭션만 즉시 필터링할 수 있습니다. 필터를 바꿔도 0.1 BTC 이상 최근 거래 기록은 유지됩니다.
 
 ### 2. 실시간 비트코인 시세
 - **초단위 시세 스트리밍 (`wss://stream.binance.com:9443/ws/btcusdt@ticker`)**: 1초 미만(틱 단위)으로 바이낸스 기준 비트코인 가격 변경을 감지합니다.
@@ -32,7 +33,7 @@
 
 - **Frontend**: Vite, TypeScript, Vanilla CSS (Glassmorphism Modern Dark UI)
 - **Fonts**: Google Fonts (Outfit, JetBrains Mono)
-- **Real-Time Engine**: WebSocket (Blockchain.info Mempool API, Binance Market Ticker API)
+- **Real-Time Engine**: WebSocket (Blockchain.info Mempool API, Binance Market Ticker API), 시세 REST 폴백 (Binance → mempool.space)
 - **Deployment**: Vercel
 
 ---
@@ -61,6 +62,8 @@ npm run dev
 | `npm run dev` | Vite 기반 로컬 개발 서버 실행 |
 | `npm run build` | 프로덕션 빌드 번들 생성 (`dist/`) |
 | `npm run preview` | 프로덕션 빌드 미리보기 |
+| `npm test` | 트랜잭션 분석 로직 단위 테스트 (`node:test`) |
+| `npm run typecheck` | TypeScript 타입 검사 |
 
 ---
 
@@ -72,8 +75,11 @@ WalletTrack/
 ├── image/
 │   └── image1.png            # 프로젝트 스크린샷 이미지
 ├── src/
-│   ├── btcWhaleTracker.ts    # 비트코인 Mempool & Binance 시세 WebSocket 엔진
+│   ├── btcWhaleTracker.ts    # 비트코인 Mempool & Binance 시세 WebSocket 엔진 (DOM)
+│   ├── txAnalysis.ts         # 금액/입출금 판정 순수 로직 & 거래소 지갑 목록
 │   └── style.css             # Glassmorphism 디자인 시스템 & 애니메이션
+├── tests/
+│   └── txAnalysis.test.ts    # 분석 로직 테스트
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json

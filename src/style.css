@@ -246,63 +246,57 @@ body {
   }
 }
 
-/* 🔥 매수(BUY) 카드 전체 초록색 배경 & 흰색 글씨 */
-.live-tx-card.buy {
+/* 📤 거래소 출금 카드: 초록 배경 & 흰색 글씨 */
+.live-tx-card.withdrawal {
   background: linear-gradient(135deg, #00C853 0%, #00897B 100%);
   border: 1px solid #00E676;
   box-shadow: 0 6px 24px rgba(0, 200, 83, 0.4);
 }
 
-.live-tx-card.buy:hover {
+.live-tx-card.withdrawal:hover {
   transform: translateX(4px);
   box-shadow: 0 8px 30px rgba(0, 230, 118, 0.55);
 }
 
-.live-tx-card.buy .tag.buy {
-  background: rgba(255, 255, 255, 0.25);
-  color: #FFFFFF;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-}
-
-.live-tx-card.buy .tx-amount-btc.buy {
-  color: #FFFFFF;
-  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
-}
-
-.live-tx-card.buy .tx-amount-usd,
-.live-tx-card.buy .tx-time-ago,
-.live-tx-card.buy .tx-hash-row,
-.live-tx-card.buy .tx-hash-row code {
-  color: rgba(255, 255, 255, 0.95);
-}
-
-/* 🔥 매도(SELL) 카드 전체 빨간색 배경 & 흰색 글씨 */
-.live-tx-card.sell {
+/* 📥 거래소 입금 카드: 빨강 배경 & 흰색 글씨 */
+.live-tx-card.deposit {
   background: linear-gradient(135deg, #D50000 0%, #8E0000 100%);
   border: 1px solid #FF5252;
   box-shadow: 0 6px 24px rgba(213, 0, 0, 0.4);
 }
 
-.live-tx-card.sell:hover {
+.live-tx-card.deposit:hover {
   transform: translateX(4px);
   box-shadow: 0 8px 30px rgba(255, 82, 82, 0.55);
 }
 
-.live-tx-card.sell .tag.sell {
+/* ↔️ 일반 전송 카드: 중립 슬레이트 배경 */
+.live-tx-card.transfer {
+  background: linear-gradient(135deg, #37474F 0%, #263238 100%);
+  border: 1px solid #546E7A;
+  box-shadow: 0 6px 24px rgba(38, 50, 56, 0.4);
+}
+
+.live-tx-card.transfer:hover {
+  transform: translateX(4px);
+  box-shadow: 0 8px 30px rgba(84, 110, 122, 0.55);
+}
+
+.live-tx-card .tag {
   background: rgba(255, 255, 255, 0.25);
   color: #FFFFFF;
   border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
-.live-tx-card.sell .tx-amount-btc.sell {
+.live-tx-card .tx-amount-btc {
   color: #FFFFFF;
   text-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
-.live-tx-card.sell .tx-amount-usd,
-.live-tx-card.sell .tx-time-ago,
-.live-tx-card.sell .tx-hash-row,
-.live-tx-card.sell .tx-hash-row code {
+.live-tx-card .tx-amount-usd,
+.live-tx-card .tx-time-ago,
+.live-tx-card .tx-hash-row,
+.live-tx-card .tx-hash-row code {
   color: rgba(255, 255, 255, 0.95);
 }
 
