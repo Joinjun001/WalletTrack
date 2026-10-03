@@ -10,11 +10,15 @@ import { track } from './analytics.ts';
 const TRADE_WS = 'wss://fstream.binance.com/market/ws/btcusdt@aggTrade';
 const LIQ_SOUND_KEY = 'wallettrack.liqSoundUsd';
 const TRADE_SOUND_KEY = 'wallettrack.tradeSoundUsd';
+const PROMPT_KEY = 'wallettrack.soundPrompt'; // 처음 방문 때 물어본 결과 (accepted | declined)
+const DEFAULT_LIQ_USD = 100_000;     // 처음 물어볼 때 '소리 켜기'를 누르면 쓰는 기준
+const DEFAULT_TRADE_USD = 1_000_000;
 const MIN_SOUND_GAP_MS = 150;      // 연달아 터질 때 소리가 뭉개지지 않게
 const TRADE_MERGE_MS = 100;         // 큰 시장가 주문은 여러 체결로 쪼개져 오므로 같은 방향 체결을 잠깐 모아서 본다
 
 let audio: AudioContext | null = null;
 let lastSoundAt = 0;
+let promptClosed = false; // 이번 방문에서 안내를 닫았는지
 let liqThreshold = 0;
 let tradeThreshold = 0;
 
@@ -41,8 +45,13 @@ function unlockAudio() {
     if (!Ctx) return;
     audio = new Ctx();
   }
-  if (audio.state === 'suspended') audio.resume();
+  if (audio.state === 'suspended') audio.resume().then(onAudioState, () => {});
+  onAudioState();
+}
+
+function onAudioState() {
   renderNote();
+  renderPrompt();
 }
 
 /** 금액이 클수록 조금 더 크고 길게 */
@@ -132,39 +141,141 @@ function syncTradeStream() {
 
 // ---------- 화면 ----------
 
-function initSelect(id: string, key: string, current: number, apply: (value: number) => void, kind: string) {
-  const select = document.getElementById(id) as HTMLSelectElement | null;
-  if (!select) return;
-  if ([...select.options].some((o) => Number(o.value) === current)) select.value = String(current);
-  else apply(0);
-  select.addEventListener('change', () => {
-    const value = Number(select.value) || 0;
-    apply(value);
-    saveNumber(key, value);
+type Kind = 'liquidation' | 'trade';
+
+const SELECTS: Record<Kind, { id: string; key: string }> = {
+  liquidation: { id: 'liq-sound-threshold', key: LIQ_SOUND_KEY },
+  trade: { id: 'trade-sound-threshold', key: TRADE_SOUND_KEY }
+};
+
+function selectOf(kind: Kind) {
+  return document.getElementById(SELECTS[kind].id) as HTMLSelectElement | null;
+}
+
+/** 목록에 있는 값만 쓴다 (예전에 저장한 값이 목록에서 빠졌으면 끈다) */
+function setThreshold(kind: Kind, value: number, save: boolean) {
+  const select = selectOf(kind);
+  if (select && ![...select.options].some((o) => Number(o.value) === value)) value = 0;
+  if (select) select.value = String(value);
+  if (kind === 'liquidation') liqThreshold = value;
+  else {
+    tradeThreshold = value;
+    syncTradeStream();
+  }
+  if (save) saveNumber(SELECTS[kind].key, value);
+}
+
+function playPreview() {
+  lastSoundAt = 0;
+  beep(false, 1, 1);
+  setTimeout(() => { lastSoundAt = 0; beep(true, 1, 1); }, 350);
+}
+
+// ---------- 처음 들어왔을 때 묻기 ----------
+
+/**
+ * ask: 아직 고른 적이 없으면 켤지 묻는다.
+ * resume: 켜 둔 사용자가 다시 왔을 때. 브라우저는 화면을 누르기 전엔 소리를 막으므로 한 번 눌러 달라고 안내한다.
+ */
+function promptMode(): 'ask' | 'resume' | null {
+  if (liqThreshold > 0 || tradeThreshold > 0) return 'resume';
+  try {
+    return localStorage.getItem(PROMPT_KEY) ? null : 'ask';
+  } catch {
+    return 'ask';
+  }
+}
+
+function renderPrompt() {
+  const box = document.getElementById('sound-prompt');
+  if (!box) return;
+  const mode = promptMode();
+  box.hidden = mode === null || promptClosed;
+  if (box.hidden || !mode) return;
+  box.dataset.mode = mode;
+  const text = document.getElementById('sound-prompt-text');
+  const allow = document.getElementById('sound-prompt-allow');
+  const dismiss = document.getElementById('sound-prompt-dismiss');
+  if (text) text.textContent = mode === 'ask'
+    ? '🔊 큰 청산이나 대량 체결이 나면 소리로 알려드릴까요?'
+    : '🔊 사운드 알림이 켜져 있어요. 소리를 들으려면 눌러 주세요';
+  if (allow) allow.textContent = '소리 켜기';
+  if (dismiss) dismiss.textContent = mode === 'ask' ? '괜찮아요' : '알림 끄기';
+}
+
+function savePromptChoice(choice: 'accepted' | 'declined') {
+  try {
+    localStorage.setItem(PROMPT_KEY, choice);
+  } catch {
+    // 시크릿 모드 등: 이번 방문 동안만
+  }
+}
+
+function initPrompt() {
+  document.getElementById('sound-prompt-allow')?.addEventListener('click', () => {
+    const mode = promptMode();
+    if (mode === 'ask') {
+      setThreshold('liquidation', DEFAULT_LIQ_USD, true);
+      setThreshold('trade', DEFAULT_TRADE_USD, true);
+    }
+    savePromptChoice('accepted');
     unlockAudio();
-    if (value > 0) beep(true, value, value); // 켜자마자 어떤 소리인지 들려준다
+    // resume()은 비동기라 바로 울리면 첫 소리가 묻힐 수 있다
+    setTimeout(playPreview, 100);
+    promptClosed = true;
+    renderPrompt();
     renderNote();
-    track('sound_alert_set', { kind, usd: value });
+    track('sound_prompt', { action: 'allow', mode: mode || '' });
   });
+
+  document.getElementById('sound-prompt-dismiss')?.addEventListener('click', () => {
+    const mode = promptMode();
+    if (mode === 'resume') {
+      setThreshold('liquidation', 0, true);
+      setThreshold('trade', 0, true);
+    }
+    savePromptChoice('declined');
+    promptClosed = true;
+    renderPrompt();
+    renderNote();
+    track('sound_prompt', { action: 'dismiss', mode: mode || '' });
+  });
+
+  renderPrompt();
 }
 
 export function initSoundAlerts() {
-  liqThreshold = loadNumber(LIQ_SOUND_KEY);
-  tradeThreshold = loadNumber(TRADE_SOUND_KEY);
+  setThreshold('liquidation', loadNumber(LIQ_SOUND_KEY), false);
+  setThreshold('trade', loadNumber(TRADE_SOUND_KEY), false);
 
-  initSelect('liq-sound-threshold', LIQ_SOUND_KEY, liqThreshold, (v) => { liqThreshold = v; }, 'liquidation');
-  initSelect('trade-sound-threshold', TRADE_SOUND_KEY, tradeThreshold, (v) => { tradeThreshold = v; syncTradeStream(); }, 'trade');
+  for (const kind of Object.keys(SELECTS) as Kind[]) {
+    const select = selectOf(kind);
+    select?.addEventListener('change', () => {
+      const value = Number(select.value) || 0;
+      setThreshold(kind, value, true);
+      savePromptChoice(value > 0 ? 'accepted' : 'declined');
+      unlockAudio();
+      if (value > 0) setTimeout(() => { lastSoundAt = 0; beep(true, value, value); }, 100); // 켜자마자 어떤 소리인지 들려준다
+      promptClosed = true;
+      renderPrompt();
+      renderNote();
+      track('sound_alert_set', { kind, usd: value });
+    });
+  }
 
   document.getElementById('sound-alert-test')?.addEventListener('click', () => {
     unlockAudio();
-    lastSoundAt = 0;
-    beep(false, 1, 1);
-    setTimeout(() => { lastSoundAt = 0; beep(true, 1, 1); }, 350);
+    setTimeout(playPreview, 100);
   });
 
-  // 설정이 켜진 채로 다시 방문하면 첫 조작 때 소리를 연다
-  const unlockOnce = () => {
+  // 설정이 켜진 채로 다시 방문하면 첫 조작 때 소리를 연다. 안내 밖을 눌렀으면 안내도 닫는다
+  // (안내 안의 '알림 끄기'를 누르는 중에 먼저 닫히면 버튼이 눌리지 않는다)
+  const unlockOnce = (e: Event) => {
     unlockAudio();
+    if (promptMode() === 'resume' && !(e.target instanceof Element && e.target.closest('#sound-prompt'))) {
+      promptClosed = true;
+      renderPrompt();
+    }
     if (audio?.state === 'running') {
       window.removeEventListener('pointerdown', unlockOnce);
       window.removeEventListener('keydown', unlockOnce);
@@ -177,6 +288,6 @@ export function initSoundAlerts() {
     if (liqThreshold > 0 && usd >= liqThreshold) beep(position === 'short', usd, liqThreshold);
   });
 
-  syncTradeStream();
+  initPrompt();
   renderNote();
 }

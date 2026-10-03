@@ -74,7 +74,6 @@ function connectUpbitWebSocket() {
     }
   };
   ws.onclose = () => {
-    document.getElementById('price-live-badge')?.classList.remove('active');
     console.warn('Upbit WS Closed, reconnecting in 2 seconds...');
     setTimeout(connectUpbitWebSocket, 2000);
   };
@@ -124,7 +123,6 @@ function render(p: Prices) {
   if (krwElem && p.krwBtc > 0) {
     if (p.krwBtc !== lastKrwBtc) flashPrice(krwElem, p.krwBtc);
     krwElem.textContent = formatKrw(p.krwBtc);
-    document.getElementById('price-live-badge')?.classList.add('active');
   }
   if (p.krwChangePct !== null) setText('krw-change', formatSignedPct(p.krwChangePct), p.krwChangePct);
   if (p.krwHigh > 0) setText('krw-high', formatKrw(p.krwHigh));

@@ -9,6 +9,39 @@
   --sell-red: #D50000;
   --font-family: 'Outfit', -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
+  --text-strong: #FFFFFF;
+  --surface-1: rgba(255, 255, 255, 0.05);
+  --line-faint: rgba(255, 255, 255, 0.04);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.1);
+  --input-bg: rgba(0, 0, 0, 0.3);
+  --up: #00E676;
+  --down: #FF5252;
+  --dialog-bg: #0E131F;
+  --panel-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  --glow: rgba(247, 147, 26, 0.12);
+  color-scheme: dark;
+}
+
+/* 라이트 모드: index.html의 스크립트가 저장된 선택(없으면 시스템 설정)으로 data-theme을 정한다 */
+:root[data-theme="light"] {
+  --bg-dark: #F3F5F9;
+  --panel-bg: rgba(255, 255, 255, 0.92);
+  --panel-border: rgba(15, 23, 42, 0.08);
+  --text-main: #0F172A;
+  --text-muted: #5B6B80;
+  --text-strong: #0B1220;
+  --surface-1: rgba(15, 23, 42, 0.04);
+  --line-faint: rgba(15, 23, 42, 0.05);
+  --line: rgba(15, 23, 42, 0.08);
+  --line-strong: rgba(15, 23, 42, 0.14);
+  --input-bg: #FFFFFF;
+  --up: #00A152;
+  --down: #E53935;
+  --dialog-bg: #FFFFFF;
+  --panel-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
+  --glow: rgba(247, 147, 26, 0.10);
+  color-scheme: light;
 }
 
 * {
@@ -33,7 +66,7 @@ body {
   transform: translateX(-50%);
   width: 900px;
   height: 600px;
-  background: radial-gradient(circle, rgba(247, 147, 26, 0.12) 0%, rgba(7, 9, 14, 0) 70%);
+  background: radial-gradient(circle, var(--glow) 0%, transparent 70%);
   z-index: -1;
   pointer-events: none;
 }
@@ -50,7 +83,7 @@ body {
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--panel-border);
   border-radius: 16px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+  box-shadow: var(--panel-shadow);
 }
 
 /* Minimalist Price Header */
@@ -64,7 +97,26 @@ body {
   margin-bottom: 1.5rem;
   border-color: rgba(247, 147, 26, 0.3);
   background: linear-gradient(180deg, rgba(247, 147, 26, 0.06) 0%, var(--panel-bg) 100%);
+  position: relative;
+  padding-right: 3.75rem;
 }
+
+.theme-toggle {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-1);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.theme-toggle:hover { border-color: var(--btc-gold); }
 
 .price-label-row {
   display: flex;
@@ -82,59 +134,24 @@ body {
   display: inline-block;
 }
 
-.price-live-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: rgba(0, 200, 83, 0.12);
-  border: 1px solid rgba(0, 200, 83, 0.35);
-  color: #00E676;
-  font-size: 0.68rem;
-  font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 12px;
-  letter-spacing: 1px;
-  opacity: 0.5;
-  transition: opacity 0.3s ease;
-}
-
-.price-live-badge.active {
-  opacity: 1;
-}
-
-.price-live-badge .badge-dot {
-  width: 6px;
-  height: 6px;
-  background-color: #00E676;
-  border-radius: 50%;
-  box-shadow: 0 0 8px #00E676;
-  animation: pulse-green 1.5s infinite ease-in-out;
-}
-
-@keyframes pulse-green {
-  0% { transform: scale(0.9); opacity: 0.6; }
-  50% { transform: scale(1.25); opacity: 1; }
-  100% { transform: scale(0.9); opacity: 0.6; }
-}
-
 .main-btc-price {
   font-size: 3.2rem;
   font-weight: 900;
   font-family: var(--font-mono);
-  color: #FFFFFF;
+  color: var(--text-strong);
   text-shadow: 0 0 25px rgba(247, 147, 26, 0.4);
   letter-spacing: -1px;
   transition: color 0.3s ease, text-shadow 0.3s ease, transform 0.15s ease;
 }
 
 .main-btc-price.price-up {
-  color: #00E676 !important;
+  color: var(--up) !important;
   text-shadow: 0 0 35px rgba(0, 230, 118, 0.85) !important;
   transform: scale(1.02);
 }
 
 .main-btc-price.price-down {
-  color: #FF5252 !important;
+  color: var(--down) !important;
   text-shadow: 0 0 35px rgba(255, 82, 82, 0.85) !important;
   transform: scale(0.98);
 }
@@ -154,8 +171,8 @@ body {
 }
 
 /* 상승/하락 색: 기존 시세 깜빡임(초록/빨강)과 맞춤 */
-.up { color: #00E676 !important; }
-.down { color: #FF5252 !important; }
+.up { color: var(--up) !important; }
+.down { color: var(--down) !important; }
 
 .header-stats {
   display: flex;
@@ -275,7 +292,7 @@ body {
   gap: 0.75rem;
   padding: 1rem 1.5rem;
   margin-bottom: 1.5rem;
-  border-color: rgba(255, 255, 255, 0.06);
+  border-color: var(--line);
 }
 
 .control-left {
@@ -292,8 +309,8 @@ body {
 }
 
 .threshold-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-1);
+  border: 1px solid var(--line-strong);
   color: var(--text-muted);
   padding: 0.4rem 0.8rem;
   border-radius: 8px;
@@ -306,7 +323,7 @@ body {
 .threshold-btn.active, .threshold-btn:hover {
   background: rgba(247, 147, 26, 0.2);
   border-color: var(--btc-gold);
-  color: #FFF;
+  color: var(--text-strong);
 }
 
 .threshold-btn.whale-filter.active {
@@ -322,7 +339,7 @@ body {
 }
 
 .count-tag {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--line);
   padding: 0.3rem 0.7rem;
   border-radius: 20px;
   font-size: 0.8rem;
@@ -372,7 +389,7 @@ body {
 /* 📤 거래소 출금 카드: 초록 배경 & 흰색 글씨 */
 .live-tx-card.withdrawal {
   background: linear-gradient(135deg, #00C853 0%, #00897B 100%);
-  border: 1px solid #00E676;
+  border: 1px solid var(--up);
   box-shadow: 0 6px 24px rgba(0, 200, 83, 0.4);
 }
 
@@ -384,7 +401,7 @@ body {
 /* 📥 거래소 입금 카드: 빨강 배경 & 흰색 글씨 */
 .live-tx-card.deposit {
   background: linear-gradient(135deg, #D50000 0%, #8E0000 100%);
-  border: 1px solid #FF5252;
+  border: 1px solid var(--down);
   box-shadow: 0 6px 24px rgba(213, 0, 0, 0.4);
 }
 
@@ -552,8 +569,8 @@ body {
 }
 
 .interval-btn, .tab-btn, .alert-add-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--surface-1);
+  border: 1px solid var(--line-strong);
   color: var(--text-muted);
   border-radius: 8px;
   font-family: inherit;
@@ -572,7 +589,7 @@ body {
 .alert-add-btn:hover {
   background: rgba(247, 147, 26, 0.2);
   border-color: var(--btc-gold);
-  color: #FFF;
+  color: var(--text-strong);
 }
 
 .price-chart {
@@ -615,7 +632,7 @@ body {
 
 .coin-table td {
   padding: 0.65rem 0.6rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--line-faint);
   white-space: nowrap;
 }
 
@@ -629,7 +646,7 @@ body {
   transition: background 0.15s ease;
 }
 
-.coin-table tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+.coin-table tbody tr:hover { background: var(--line-faint); }
 .coin-table tbody tr.selected { background: rgba(247, 147, 26, 0.1); }
 
 .coin-name-cell strong { font-weight: 700; margin-right: 0.4rem; }
@@ -652,7 +669,7 @@ body {
 .ls-bar {
   height: 10px;
   border-radius: 5px;
-  background: #FF5252;
+  background: var(--down);
   overflow: hidden;
   margin: 0.6rem 0 0.4rem;
 }
@@ -660,7 +677,7 @@ body {
 .ls-bar-long {
   height: 100%;
   width: 50%;
-  background: #00E676;
+  background: var(--up);
   transition: width 0.4s ease;
 }
 
@@ -713,13 +730,13 @@ body {
   animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.liq-item.long { background: rgba(255, 82, 82, 0.12); border-left: 3px solid #FF5252; }
-.liq-item.short { background: rgba(0, 230, 118, 0.1); border-left: 3px solid #00E676; }
+.liq-item.long { background: rgba(255, 82, 82, 0.12); border-left: 3px solid var(--down); }
+.liq-item.short { background: rgba(0, 230, 118, 0.1); border-left: 3px solid var(--up); }
 .liq-item.big { box-shadow: 0 0 16px rgba(255, 215, 0, 0.35); border-left-color: #FFD700; }
 
 .liq-symbol { font-weight: 800; }
-.liq-item.long .liq-side { color: #FF5252; }
-.liq-item.short .liq-side { color: #00E676; }
+.liq-item.long .liq-side { color: var(--down); }
+.liq-item.short .liq-side { color: var(--up); }
 .liq-usd { font-family: var(--font-mono); font-weight: 800; text-align: right; }
 .liq-time { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted); }
 
@@ -745,8 +762,8 @@ body {
 .calc-row input, .alert-form input {
   width: 100%;
   min-width: 0;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--input-bg);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   color: var(--text-main);
   font-family: var(--font-mono);
@@ -783,7 +800,7 @@ body {
   gap: 0.5rem;
   font-size: 0.8rem;
   padding: 0.3rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--line-faint);
 }
 
 .alert-item strong { font-family: var(--font-mono); text-align: right; }
@@ -797,7 +814,7 @@ body {
   line-height: 1;
 }
 
-.alert-remove:hover { color: #FF5252; }
+.alert-remove:hover { color: var(--down); }
 
 /* Toast */
 .toast-root {
@@ -849,13 +866,13 @@ body {
   align-items: center;
   gap: 0.5rem;
   padding: 0.45rem 0.25rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid var(--line-faint);
   font-size: 0.85rem;
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
-.mover-item:hover { background: rgba(255, 255, 255, 0.04); }
+.mover-item:hover { background: var(--line-faint); }
 .mover-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mover-name span { font-size: 0.75rem; color: var(--text-muted); }
 .mover-price, .mover-change { font-family: var(--font-mono); text-align: right; }
@@ -901,22 +918,22 @@ body {
   display: block;
   height: 8px;
   border-radius: 4px;
-  background: #00E676;
+  background: var(--up);
   overflow: hidden;
 }
 
 .liq-top-long {
   display: block;
   height: 100%;
-  background: #FF5252;
+  background: var(--down);
 }
 
 /* History charts */
 .history-chart { height: 300px; }
 
 .history-select {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--input-bg);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   color: var(--text-main);
   font-family: inherit;
@@ -932,7 +949,7 @@ body {
 .progress-bar {
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--line);
   overflow: hidden;
   margin: 0.5rem 0 0.3rem;
 }
@@ -948,8 +965,8 @@ body {
 .whale-alert-row select {
   width: 100%;
   min-width: 0;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--input-bg);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   color: var(--text-main);
   font-family: inherit;
@@ -960,6 +977,46 @@ body {
 .whale-alert-row select:focus { outline: none; border-color: var(--btc-gold); }
 
 .sound-test-btn { width: 100%; margin-top: 0.25rem; }
+
+/* 처음 들어왔을 때 사운드 알림을 켤지 묻는 안내 (화면 아래) */
+.sound-prompt {
+  position: fixed;
+  left: 50%;
+  bottom: 1.25rem;
+  transform: translateX(-50%);
+  z-index: 50;
+  width: min(460px, calc(100vw - 2rem));
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-color: rgba(247, 147, 26, 0.45);
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sound-prompt[hidden] { display: none; }
+.sound-prompt p { flex: 1; font-size: 0.9rem; font-weight: 600; }
+.sound-prompt-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
+
+.sound-prompt-allow {
+  background: var(--btc-gold);
+  border-color: var(--btc-gold);
+  color: #111;
+}
+
+.sound-prompt-allow:hover { background: #FFA834; color: #111; }
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+@media (max-width: 480px) {
+  .sound-prompt { flex-direction: column; align-items: stretch; text-align: center; }
+  .sound-prompt-actions > button { flex: 1; padding: 0.55rem; }
+}
+
+:root[data-theme="light"] .main-btc-price { text-shadow: none; }
 
 .tool-note {
   font-size: 0.72rem;
@@ -993,7 +1050,7 @@ body {
   margin: auto;
   padding: 1.25rem;
   color: var(--text-main);
-  background: #0E131F;
+  background: var(--dialog-bg);
 }
 
 .feedback-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
@@ -1009,8 +1066,8 @@ body {
 .feedback-form textarea {
   width: 100%;
   resize: vertical;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--input-bg);
+  border: 1px solid var(--line-strong);
   border-radius: 8px;
   color: var(--text-main);
   font: inherit;
@@ -1049,7 +1106,8 @@ body {
 
 @media (max-width: 768px) {
   .app-container { padding: 1rem 0.75rem; }
-  .price-header { padding: 1rem 1.1rem; gap: 0.9rem; margin-bottom: 1rem; }
+  .price-header { padding: 1rem 3.25rem 1rem 1.1rem; gap: 0.9rem; margin-bottom: 1rem; }
+  .theme-toggle { top: 0.6rem; right: 0.6rem; }
   .main-btc-price { font-size: 1.9rem; }
   .main-change { font-size: 1rem; }
   /* 보조 지표 3개를 한 줄에 */

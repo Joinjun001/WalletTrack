@@ -10,6 +10,7 @@ import { formatFundingRate, formatSignedPct, KST_OFFSET_SEC } from './market.ts'
 import { getHistory } from './historyApi.ts';
 import type { FuturesPoint, KimchiPoint } from './historyApi.ts';
 import { track } from './analytics.ts';
+import { registerThemedChart } from './theme.ts';
 
 const REFRESH_MS = 60 * 1000;
 const UP_COLOR = '#00E676';
@@ -42,6 +43,7 @@ class HistoryChart {
       ...baseChartOptions(),
       localization: { locale: 'ko-KR' }
     });
+    registerThemedChart(this.chart);
     this.status = document.getElementById(statusId);
   }
 

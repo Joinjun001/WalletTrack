@@ -10,6 +10,7 @@ import { applyTick, candleTimeOf, krwPricePrecision, KST_OFFSET_SEC } from './ma
 import type { Candle } from './market.ts';
 import { track } from './analytics.ts';
 import { getUpbit } from './historyApi.ts';
+import { chartThemeOptions, registerThemedChart } from './theme.ts';
 
 const UPBIT_CANDLES = 'https://api.upbit.com/v1/candles';
 const CANDLE_COUNT = 200;
@@ -115,20 +116,17 @@ function applyLivePrice(price: number, tradeMs: number) {
 
 /** 사이트 차트 공통 모양 (기록 추이 차트도 같이 쓴다) */
 export function baseChartOptions(): DeepPartial<TimeChartOptions> {
+  const themed = chartThemeOptions();
   return {
+    ...themed,
     autoSize: true,
     layout: {
+      ...themed.layout,
       background: { type: ColorType.Solid, color: 'transparent' },
-      textColor: '#7A899C',
       fontFamily: "'JetBrains Mono', monospace",
       fontSize: 11
     },
-    grid: {
-      vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
-      horzLines: { color: 'rgba(255, 255, 255, 0.04)' }
-    },
-    rightPriceScale: { borderColor: 'rgba(255, 255, 255, 0.08)' },
-    timeScale: { borderColor: 'rgba(255, 255, 255, 0.08)', timeVisible: true, secondsVisible: false }
+    timeScale: { ...themed.timeScale, timeVisible: true, secondsVisible: false }
   };
 }
 
@@ -157,6 +155,8 @@ export function initPriceChart() {
       priceFormatter: (p: number) => p.toLocaleString('ko-KR', { minimumFractionDigits: pricePrecision, maximumFractionDigits: pricePrecision })
     }
   });
+
+  registerThemedChart(chart);
 
   candleSeries = chart.addSeries(CandlestickSeries, {
     upColor: UP_COLOR,

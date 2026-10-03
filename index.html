@@ -3,6 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
+  <script>
+    // 첫 화면부터 테마를 맞춘다 (src/theme.ts와 같은 키). 고른 적이 없으면 시스템 설정을 따른다
+    (function () {
+      var theme = null;
+      try { theme = localStorage.getItem('wallettrack.theme'); } catch (e) {}
+      if (theme !== 'light' && theme !== 'dark') theme = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      document.documentElement.dataset.theme = theme;
+    })();
+  </script>
   <title>고래 지갑 추적기 · 비트코인 실시간</title>
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,10 +26,10 @@
   <div class="app-container">
     <!-- Price Bar: 원화 시세 + 보조 지표 -->
     <header class="price-header glass-panel">
+      <button id="theme-toggle" type="button" class="theme-toggle" aria-label="테마 바꾸기">☀️</button>
       <div class="price-box">
         <div class="price-label-row">
-          <span class="price-label">BTC / KRW · 업비트</span>
-          <span id="price-live-badge" class="price-live-badge"><span class="badge-dot"></span>LIVE</span>
+          <span class="price-label">BTC / KRW</span>
         </div>
         <div class="main-price-row">
           <h1 id="krw-btc-price" class="main-btc-price">-</h1>
@@ -359,6 +369,14 @@
         <button id="analytics-toggle" class="footer-link">수집 끄기</button>
       </p>
     </footer>
+  </div>
+
+  <div id="sound-prompt" class="sound-prompt glass-panel" role="dialog" aria-label="사운드 알림" hidden>
+    <p id="sound-prompt-text"></p>
+    <div class="sound-prompt-actions">
+      <button id="sound-prompt-allow" type="button" class="alert-add-btn sound-prompt-allow">소리 켜기</button>
+      <button id="sound-prompt-dismiss" type="button" class="alert-add-btn">괜찮아요</button>
+    </div>
   </div>
 
   <dialog id="feedback-dialog" class="feedback-dialog glass-panel" aria-labelledby="feedback-title">
