@@ -5,7 +5,7 @@
 ```
 mempool.space / 바이낸스 / 업비트
         │
-   collector ──► PostgreSQL ◄── api ◄── caddy(HTTPS) ◄── 웹 (Vercel)
+   collector ──► PostgreSQL ◄── api ◄── nginx 또는 caddy (HTTPS) ◄── 웹 (Vercel)
 ```
 
 | 서비스 | 하는 일 |
@@ -13,7 +13,9 @@ mempool.space / 바이낸스 / 업비트
 | `collector` | 고래 거래(≥0.1 BTC), 바이낸스 선물 강제청산, 선물 지표(5분), 코인별 김프(1분) 저장, 180일 지난 기록 삭제 |
 | `api` | 기록 조회 REST API (읽기 전용) |
 | `db` | PostgreSQL 17 (외부 포트 없음) |
-| `caddy` | HTTPS 인증서 자동 발급·갱신, `api`로 전달 |
+| `caddy` | (선택, `--profile caddy`) 80/443을 쓰는 웹 서버가 없을 때 HTTPS 처리 |
+
+현재 운영 서버(OCI 오사카, `bittrack.duckdns.org`)에는 다른 사이트용 nginx가 이미 80 포트를 쓰고 있으므로 **nginx 방식**을 쓴다.
 
 거래 분석·김프 계산은 웹과 같은 코드(`../src/txAnalysis.ts`, `../src/market.ts`)를 쓴다.
 
@@ -56,10 +58,10 @@ sudo usermod -aG docker $USER   # 다시 로그인하면 sudo 없이 docker 사�
 
 ### 3. 서버 방화벽 열기
 
-OCI Ubuntu 이미지는 iptables가 80/443을 막고 있다 (Security List와 별개).
+OCI Ubuntu 이미지는 iptables가 80/443을 막고 있다 (Security List와 별개). 이미 열려 있으면 건너뛴다.
 
 ```bash
-sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -L INPUT -n --line-numbers | grep -E "dpt:(80|443)"   # 이미 있는지 확인
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
 sudo netfilter-persistent save
 ```
@@ -71,16 +73,44 @@ git clone https://github.com/Joinjun001/WalletTrack.git
 cd WalletTrack/server
 cp .env.example .env
 sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
-nano .env    # API_DOMAIN을 DuckDNS 주소로
+sudo ss -ltnp | grep ':8080 '        # 다른 서비스가 8080을 쓰고 있으면 docker-compose.yml의 "127.0.0.1:8080"과 nginx proxy_pass 포트를 바꾼다
 docker compose up -d --build
+curl -s localhost:8080/api/health    # {"ok":true,...}
 ```
 
-### 5. 확인
+### 5. HTTPS 연결
+
+**nginx가 이미 있는 경우 (현재 서버)** — 기존 사이트 설정은 건드리지 않고 도메인용 설정만 추가한다.
+
+```bash
+sudo tee /etc/nginx/sites-available/bittrack >/dev/null <<'NGINX'
+server {
+    listen 80;
+    server_name bittrack.duckdns.org;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+NGINX
+sudo ln -s /etc/nginx/sites-available/bittrack /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d bittrack.duckdns.org   # 443 설정과 자동 갱신까지 추가된다
+```
+
+**80/443을 쓰는 웹 서버가 없는 경우** — `.env`의 `API_DOMAIN`을 확인하고 `docker compose --profile caddy up -d --build`.
+
+### 6. 확인
 
 ```bash
 docker compose ps
 docker compose logs -f collector     # "연결됨", 10분마다 "최근 10분 저장: ..."
-curl https://<API_DOMAIN>/api/health
+curl https://bittrack.duckdns.org/api/health
 ```
 
 ## 운영
