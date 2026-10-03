@@ -6,6 +6,7 @@ import { prices, subscribePrices } from './priceStore.ts';
 import { alertDirection, formatKrw, formatSignedPct, isThresholdCrossed, kimchiPremium } from './market.ts';
 import type { PriceAlert } from './market.ts';
 import { onLiveTx } from './btcWhaleTracker.ts';
+import { track, trackOnce } from './analytics.ts';
 
 const SATS_PER_BTC = 100_000_000;
 const ALERTS_KEY = 'wallettrack.priceAlerts';
@@ -57,6 +58,7 @@ function initCalculator() {
   for (const unit of UNITS) {
     const input = document.getElementById(`calc-${unit}`) as HTMLInputElement | null;
     input?.addEventListener('input', () => {
+      trackOnce('calc_use', unit, { unit });
       anchor = { unit, value: parseNumber(input.value) };
       recalc();
     });
@@ -70,6 +72,7 @@ function initCalculator() {
 // ---------- 가격·김프 알림 ----------
 
 interface AlertCardConfig {
+  kind: 'price' | 'kimchi';             // 사용 기록용
   storageKey: string;
   formId: string;
   inputId: string;
@@ -105,7 +108,8 @@ function notify(title: string, message: string) {
 
 // 알림 권한은 사용자가 버튼을 누르는 등 직접 조작한 시점에만 요청할 수 있다
 function requestNotificationPermission() {
-  if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
+  if (!('Notification' in window) || Notification.permission !== 'default') return;
+  Notification.requestPermission().then((permission) => track('notification_permission', { permission }));
 }
 
 /** 목표값을 등록해 두고, 값이 등록 시점 기준 방향으로 목표를 넘으면 한 번 알리고 지운다 */
@@ -134,6 +138,7 @@ function initAlertCard(cfg: AlertCardConfig) {
         alerts = alerts.filter((a) => a.id !== alert.id);
         saveJson(cfg.storageKey, alerts);
         render();
+        track('alert_remove', { kind: cfg.kind });
       });
       list.appendChild(li);
     }
@@ -149,10 +154,12 @@ function initAlertCard(cfg: AlertCardConfig) {
       showToast('시세를 받아오는 중이에요. 잠시 후 다시 시도해 주세요.');
       return;
     }
-    alerts.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, target, direction: alertDirection(target, current) });
+    const direction = alertDirection(target, current);
+    alerts.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, target, direction });
     saveJson(cfg.storageKey, alerts);
     render();
     form.reset();
+    track('alert_add', { kind: cfg.kind, target, current, direction, count: alerts.length, permission: 'Notification' in window ? Notification.permission : 'unsupported' });
     requestNotificationPermission();
   });
 
@@ -166,13 +173,17 @@ function initAlertCard(cfg: AlertCardConfig) {
     alerts = alerts.filter((a) => !fired.includes(a));
     saveJson(cfg.storageKey, alerts);
     render();
-    for (const alert of fired) notify(cfg.title, cfg.describe(alert, value));
+    for (const alert of fired) {
+      notify(cfg.title, cfg.describe(alert, value));
+      track('alert_fired', { kind: cfg.kind, target: alert.target, direction: alert.direction });
+    }
   });
   render();
 }
 
 function initAlerts() {
   initAlertCard({
+    kind: 'price',
     storageKey: ALERTS_KEY,
     formId: 'alert-form',
     inputId: 'alert-price',
@@ -188,6 +199,7 @@ function initAlerts() {
   });
 
   initAlertCard({
+    kind: 'kimchi',
     storageKey: KIMCHI_ALERTS_KEY,
     formId: 'kimchi-alert-form',
     inputId: 'kimchi-alert-input',
@@ -215,6 +227,7 @@ function initWhaleAlert() {
   select.addEventListener('change', () => {
     threshold = Number(select.value) || 0;
     saveJson(WHALE_ALERT_KEY, threshold);
+    track('whale_alert_set', { btc: threshold });
     if (threshold > 0) requestNotificationPermission();
   });
 
@@ -226,11 +239,12 @@ function initWhaleAlert() {
     lastNotifiedAt = now;
     const where = tx.direction === 'deposit' ? `${tx.exchangeName} 입금` : tx.direction === 'withdrawal' ? `${tx.exchangeName} 출금` : '전송';
     const krw = prices.krwBtc > 0 ? ` (약 ${formatKrw(tx.btcAmount * prices.krwBtc)})` : '';
+    track('whale_alert_fired', { btc: threshold });
     notify('고래 거래', `🐋 ${tx.btcAmount.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC ${where}${krw}`);
   });
 }
 
-function showToast(message: string) {
+export function showToast(message: string) {
   const root = document.getElementById('toast-root');
   if (!root) return;
   const toast = document.createElement('div');

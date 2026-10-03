@@ -964,6 +964,70 @@ body {
   color: var(--text-muted);
 }
 
+/* Footer & feedback */
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-top: 1.5rem;
+  padding: 1rem 0 0.5rem;
+  border-top: 1px solid var(--panel-border);
+}
+
+.footer-link {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.footer-link:hover { color: var(--text-main); }
+
+.feedback-dialog {
+  width: min(440px, calc(100vw - 2rem));
+  margin: auto;
+  padding: 1.25rem;
+  color: var(--text-main);
+  background: #0E131F;
+}
+
+.feedback-dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.feedback-form .history-select { align-self: flex-start; font-size: 0.85rem; padding: 0.35rem 0.5rem; }
+
+.feedback-form textarea {
+  width: 100%;
+  resize: vertical;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: var(--text-main);
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.6rem;
+}
+
+.feedback-form textarea:focus { outline: none; border-color: var(--btc-gold); }
+
+.feedback-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.feedback-actions { display: flex; gap: 0.4rem; }
+.feedback-actions .interval-btn { padding: 0.4rem 0.75rem; font-size: 0.85rem; }
+.alert-add-btn:disabled { opacity: 0.5; cursor: wait; }
+
 @media (max-width: 960px) {
   .dashboard { grid-template-columns: minmax(0, 1fr); }
   /* 모바일: 사이드 패널을 피드 위에 가로 스크롤 카드로 */

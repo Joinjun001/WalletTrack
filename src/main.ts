@@ -1,4 +1,6 @@
 import { initLiveStreamDashboard } from './btcWhaleTracker.ts';
+import { initAnalytics, track } from './analytics.ts';
+import { initFeedback } from './feedback.ts';
 import { initKrMarket } from './krMarket.ts';
 import { initNetworkPanel } from './networkPanel.ts';
 import { initPriceChart } from './priceChart.ts';
@@ -20,11 +22,13 @@ function initTabs() {
       document.querySelectorAll<HTMLElement>('.tab-panel').forEach((panel) => {
         panel.hidden = panel.dataset.panel !== btn.dataset.tab;
       });
+      track('tab_open', { tab: btn.dataset.tab || '' });
     });
   });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initAnalytics();
   initTabs();
   // 업비트 시세 구독자(차트, 코인 표)를 먼저 등록한 뒤 업비트 연결을 연다
   initPriceChart();
@@ -37,4 +41,5 @@ document.addEventListener('DOMContentLoaded', () => {
   initTopMovers();
   initHistoryStats();
   initHistoryCharts();
+  initFeedback();
 });

@@ -3,7 +3,9 @@
  * 서버가 꺼져 있거나 느리면 null을 돌려주고, 화면은 지금처럼 실시간 데이터만 보여준다.
  */
 
-const HISTORY_API = 'https://bittrack.duckdns.org/api';
+import { trackOnce } from './analytics.ts';
+
+export const HISTORY_API = 'https://bittrack.duckdns.org/api';
 const TIMEOUT_MS = 5000;
 
 export interface WhaleRecord {
@@ -57,9 +59,12 @@ export interface FuturesPoint {
 export async function getHistory<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${HISTORY_API}${path}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
-    return res.ok ? ((await res.json()) as T) : null;
+    if (res.ok) return (await res.json()) as T;
+    trackOnce('api_fail', `history:${res.status}`, { source: 'history', status: res.status, path: path.split('?')[0] });
+    return null;
   } catch (e) {
     console.warn(`History API ${path} failed:`, e);
+    trackOnce('api_fail', 'history:network', { source: 'history', status: 0, path: path.split('?')[0] });
     return null;
   }
 }

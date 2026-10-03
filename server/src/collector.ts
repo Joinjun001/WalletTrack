@@ -147,7 +147,8 @@ async function deleteOldRows() {
     ['whale_txs', 'detected_at'],
     ['liquidations', 'occurred_at'],
     ['futures_stats', 'recorded_at'],
-    ['kimchi_premium', 'recorded_at']
+    ['kimchi_premium', 'recorded_at'],
+    ['usage_events', 'created_at']
   ];
   try {
     for (const [table, column] of tables) {

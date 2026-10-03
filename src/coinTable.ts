@@ -7,6 +7,7 @@ import { onUpbitTicker } from './krMarket.ts';
 import { prices, subscribePrices } from './priceStore.ts';
 import { selectChartCoin } from './priceChart.ts';
 import { kimchiPremium, formatKrwPrice, formatKrwShort, formatSignedPct } from './market.ts';
+import { track } from './analytics.ts';
 
 const BINANCE_REST = 'https://api.binance.com/api/v3/ticker/price';
 const BINANCE_WS = 'wss://stream.binance.com:9443/stream';
@@ -77,6 +78,7 @@ function buildRows() {
     if (!row?.dataset.symbol) return;
     tbody.querySelectorAll('tr').forEach((r) => r.classList.toggle('selected', r === row));
     selectChartCoin(row.dataset.symbol);
+    track('chart_coin', { symbol: row.dataset.symbol, from: 'coin_table' });
     document.querySelector('.chart-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 }

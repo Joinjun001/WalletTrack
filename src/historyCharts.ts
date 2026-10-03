@@ -9,6 +9,7 @@ import { COINS } from './coins.ts';
 import { formatFundingRate, formatSignedPct, KST_OFFSET_SEC } from './market.ts';
 import { getHistory } from './historyApi.ts';
 import type { FuturesPoint, KimchiPoint } from './historyApi.ts';
+import { track } from './analytics.ts';
 
 const REFRESH_MS = 60 * 1000;
 const UP_COLOR = '#00E676';
@@ -128,9 +129,13 @@ function initKimchiChart() {
       return list && list.map((p) => ({ t: p.t, value: p.premiumPct }));
     }, KIMCHI_METRIC, fit);
 
-  select.addEventListener('change', () => load(true));
+  select.addEventListener('change', () => {
+    track('history_chart', { chart: 'kimchi', symbol: select.value, hours });
+    load(true);
+  });
   bindHours(card, (h) => {
     hours = h;
+    track('history_chart', { chart: 'kimchi', symbol: select.value, hours });
     load(true);
   });
   load(true);
@@ -174,13 +179,18 @@ function initFuturesChart() {
     btn.addEventListener('click', () => {
       if (!btn.dataset.metric || !FUTURES_METRICS[btn.dataset.metric]) return;
       metricKey = btn.dataset.metric;
+      track('history_chart', { chart: 'futures', symbol: select.value, metric: metricKey, hours });
       card.querySelectorAll('[data-metric]').forEach((b) => b.classList.toggle('active', b === btn));
       load(true);
     });
   });
-  select.addEventListener('change', () => load(true));
+  select.addEventListener('change', () => {
+    track('history_chart', { chart: 'futures', symbol: select.value, metric: metricKey, hours });
+    load(true);
+  });
   bindHours(card, (h) => {
     hours = h;
+    track('history_chart', { chart: 'futures', symbol: select.value, metric: metricKey, hours });
     load(true);
   });
   load(true);

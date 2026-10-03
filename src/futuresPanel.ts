@@ -6,6 +6,7 @@ import { escapeHtml } from './txAnalysis.ts';
 import { COINS } from './coins.ts';
 import { formatCountdown, formatFundingRate, formatSignedPct, formatUsdShort, liquidatedPosition } from './market.ts';
 import { getHistory } from './historyApi.ts';
+import { trackOnce } from './analytics.ts';
 import type { LiquidationRecord, LiquidationSummary } from './historyApi.ts';
 
 const FAPI = 'https://fapi.binance.com';
@@ -22,7 +23,10 @@ let shortLiquidatedUsd = 0;
 async function getJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${FAPI}${path}`);
-    return res.ok ? ((await res.json()) as T) : null;
+    if (res.ok) return (await res.json()) as T;
+    // 지역 제한(451)으로 선물 탭이 비는 사용자가 얼마나 되는지 보기 위해 남긴다
+    trackOnce('api_fail', `binance_futures:${res.status}`, { source: 'binance_futures', status: res.status });
+    return null;
   } catch (e) {
     console.warn(`Binance futures ${path} failed:`, e);
     return null;

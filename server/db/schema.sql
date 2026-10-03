@@ -43,3 +43,26 @@ CREATE TABLE IF NOT EXISTS kimchi_premium (
   premium_pct double precision NOT NULL,
   PRIMARY KEY (symbol, recorded_at)
 );
+
+-- 웹 사용 기록 (익명). 브라우저마다 만든 무작위 ID만 쓰고 IP 등 개인정보는 저장하지 않는다
+CREATE TABLE IF NOT EXISTS usage_events (
+  id         bigserial PRIMARY KEY,
+  visitor_id text NOT NULL,              -- 브라우저 localStorage의 무작위 ID (재방문 구분용)
+  session_id text NOT NULL,              -- 탭을 열 때마다 새로 만드는 무작위 ID
+  name       text NOT NULL,              -- page_view, tab_open, alert_add, error ...
+  props      jsonb NOT NULL DEFAULT '{}',
+  client_at  timestamptz,                -- 브라우저 기준 발생 시각 (모아서 보내므로 created_at과 다를 수 있다)
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS usage_events_created_at ON usage_events (created_at DESC);
+CREATE INDEX IF NOT EXISTS usage_events_name ON usage_events (name, created_at DESC);
+
+-- 사이트의 "의견 보내기"로 받은 글 (보관 기간 제한 없음)
+CREATE TABLE IF NOT EXISTS feedback (
+  id         bigserial PRIMARY KEY,
+  visitor_id text NOT NULL,
+  category   text NOT NULL CHECK (category IN ('bug', 'idea', 'other')),
+  message    text NOT NULL,
+  context    jsonb NOT NULL DEFAULT '{}', -- 보낸 시점의 탭, 기기 종류, 화면 크기
+  created_at timestamptz NOT NULL DEFAULT now()
+);

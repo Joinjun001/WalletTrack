@@ -29,6 +29,12 @@ mempool.space / 바이낸스 / 업비트
 | `GET /api/liquidations/summary?hours=24` | 롱/숏 청산 합계 |
 | `GET /api/futures?symbol=BTCUSDT&hours=24` | 펀딩비·미결제약정·롱 비율 추이 |
 | `GET /api/kimchi?symbol=BTC&hours=24` | 김프 추이 |
+| `GET /api/liquidations/by-symbol?hours=24&limit=10` | 코인별 청산 합계 순위 |
+| `GET /api/whales/flow?hours=24` | 고래 거래 입금·출금·전송 합계 |
+| `POST /api/events` | 웹 익명 사용 기록 (1분에 120번까지) |
+| `POST /api/feedback` | 사이트 "의견 보내기" (10분에 5번까지) |
+
+사용 기록은 브라우저마다 만든 무작위 ID로만 구분하고 IP 등 개인정보는 저장하지 않는다 (`usage_events`, 180일 보관). 의견은 `feedback`에 기한 없이 보관한다. 분석 쿼리는 `db/usage-queries.sql`.
 
 시각은 모두 밀리초 타임스탬프. 기간이 길면(1일 초과) 평균을 내서 점 개수를 줄인다.
 
@@ -121,6 +127,9 @@ git pull && docker compose up -d --build
 
 # DB 접속
 docker compose exec db psql -U wallettrack
+
+# 사용 기록·의견 요약 보기
+docker compose exec -T db psql -U wallettrack < db/usage-queries.sql
 
 # 백업: mkdir -p ~/backup 후 crontab -e 에 아래 줄 추가 (매일 3시, 7일치 보관)
 0 3 * * * cd ~/WalletTrack/server && docker compose exec -T db pg_dump -U wallettrack wallettrack | gzip > ~/backup/wallettrack-$(date +\%F).sql.gz && find ~/backup -name 'wallettrack-*.sql.gz' -mtime +7 -delete

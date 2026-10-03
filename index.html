@@ -324,7 +324,35 @@
         </div>
       </aside>
     </div>
+
+    <footer class="site-footer">
+      <button id="feedback-open" class="alert-add-btn">💬 의견 보내기</button>
+      <p class="tool-note">
+        서비스 개선을 위해 익명 사용 기록(방문·기능 사용·오류)을 모아요. 개인정보와 IP는 저장하지 않아요.
+        <button id="analytics-toggle" class="footer-link">수집 끄기</button>
+      </p>
+    </footer>
   </div>
+
+  <dialog id="feedback-dialog" class="feedback-dialog glass-panel" aria-labelledby="feedback-title">
+    <form id="feedback-form" class="feedback-form">
+      <h2 id="feedback-title" class="info-title">💬 의견 보내기</h2>
+      <select id="feedback-category" class="history-select" aria-label="종류">
+        <option value="idea">기능 제안</option>
+        <option value="bug">버그 신고</option>
+        <option value="other">기타</option>
+      </select>
+      <textarea id="feedback-message" maxlength="1000" rows="5" required placeholder="불편했던 점이나 있었으면 하는 기능을 알려 주세요"></textarea>
+      <div class="feedback-foot">
+        <span id="feedback-count" class="tool-note">0/1000</span>
+        <div class="feedback-actions">
+          <button type="button" id="feedback-cancel" class="interval-btn">취소</button>
+          <button type="submit" class="alert-add-btn">보내기</button>
+        </div>
+      </div>
+      <p class="tool-note">연락처 등 개인정보는 적지 말아 주세요</p>
+    </form>
+  </dialog>
 
   <div id="toast-root" class="toast-root" aria-live="polite"></div>
 

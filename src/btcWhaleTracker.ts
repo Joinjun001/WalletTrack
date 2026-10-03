@@ -8,6 +8,7 @@ import type { ExchangeWallet, MempoolTx, RawTx, TxDirection } from './txAnalysis
 import { prices, updatePrices } from './priceStore.ts';
 import { formatKrwShort, formatSignedPct } from './market.ts';
 import { getHistory } from './historyApi.ts';
+import { track, trackOnce } from './analytics.ts';
 import type { WhaleRecord } from './historyApi.ts';
 
 export interface LiveBtcTransaction {
@@ -54,7 +55,10 @@ export async function fetchBtcPrice(): Promise<number> {
 async function fetchPriceFromBinance(): Promise<number | null> {
   try {
     const res = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-    if (!res.ok) return null; // e.g. 451 in restricted regions
+    if (!res.ok) {
+      trackOnce('api_fail', `binance_spot:${res.status}`, { source: 'binance_spot', status: res.status });
+      return null; // e.g. 451 in restricted regions
+    }
     const data = await res.json();
     const price = parseFloat(data?.price);
     return price > 0 ? price : null;
@@ -167,6 +171,7 @@ export async function initLiveStreamDashboard() {
       const target = e.currentTarget as HTMLElement;
       target.classList.add('active');
       minBtcThreshold = parseFloat(target.dataset.threshold || '0.1');
+      track('whale_filter', { btc: minBtcThreshold });
       renderFeed(feedContainer, countElem, totalVolElem);
     });
   });
@@ -240,6 +245,7 @@ function connectWebSocket(container: HTMLElement | null, countElem: HTMLElement 
 
     ws.onerror = (err) => {
       console.warn('WS Error, reconnecting...', err);
+      trackOnce('api_fail', 'mempool_ws', { source: 'mempool_ws', status: 0 });
       if (statusDot) statusDot.className = 'dot red';
     };
 

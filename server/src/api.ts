@@ -9,11 +9,15 @@
  * GET /api/whales/flow?hours=24
  * GET /api/futures?symbol=BTCUSDT&hours=24
  * GET /api/kimchi?symbol=BTC&hours=24
+ *
+ * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts)
  */
 
 import { createServer } from 'node:http';
+import type { IncomingMessage } from 'node:http';
 import { config, log } from './config.ts';
 import { query } from './db.ts';
+import { BadRequest, rateLimiter, saveEvents, saveFeedback } from './usage.ts';
 
 type Params = URLSearchParams;
 
@@ -165,10 +169,48 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
   }
 };
 
+const MAX_BODY_BYTES = 64 * 1024;
+
+const postRoutes: Record<string, { handle: (body: unknown) => Promise<unknown>; allow: (key: string) => boolean }> = {
+  '/api/events': { handle: saveEvents, allow: rateLimiter(120, 60_000) },       // 1분에 120번
+  '/api/feedback': { handle: saveFeedback, allow: rateLimiter(5, 10 * 60_000) } // 10분에 5번
+};
+
+function readBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        reject(new HttpError(413, 'body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch {
+        reject(new HttpError(400, 'invalid json'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+/** nginx가 X-Forwarded-For 끝에 실제 접속 주소를 붙인다 (앞쪽 값은 사용자가 조작할 수 있다) */
+function clientAddress(req: IncomingMessage): string {
+  const forwarded = String(req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return forwarded[forwarded.length - 1] || req.socket.remoteAddress || 'unknown';
+}
+
 const server = createServer(async (req, res) => {
   const headers: Record<string, string> = {
     'Access-Control-Allow-Origin': config.corsOrigin,
-    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'public, max-age=10'
   };
@@ -182,9 +224,25 @@ const server = createServer(async (req, res) => {
     res.end();
     return;
   }
+  const url = new URL(req.url || '/', 'http://localhost');
+
+  if (req.method === 'POST') {
+    headers['Cache-Control'] = 'no-store';
+    const route = postRoutes[url.pathname.replace(/\/$/, '')];
+    if (!route) return send(404, { error: 'not found' });
+    if (!route.allow(clientAddress(req))) return send(429, { error: 'too many requests' });
+    try {
+      send(200, await route.handle(await readBody(req)));
+    } catch (e) {
+      if (e instanceof HttpError) return send(e.status, { error: e.message });
+      if (e instanceof BadRequest) return send(400, { error: e.message });
+      log(`${url.pathname} 실패:`, e);
+      send(500, { error: 'internal error' });
+    }
+    return;
+  }
   if (req.method !== 'GET') return send(405, { error: 'method not allowed' });
 
-  const url = new URL(req.url || '/', 'http://localhost');
   const handler = routes[url.pathname.replace(/\/$/, '')];
   if (!handler) return send(404, { error: 'not found' });
 

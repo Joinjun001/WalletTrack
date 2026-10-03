@@ -8,6 +8,7 @@ import { onUpbitTicker } from './krMarket.ts';
 import { coinName } from './coins.ts';
 import { applyTick, candleTimeOf, krwPricePrecision, KST_OFFSET_SEC } from './market.ts';
 import type { Candle } from './market.ts';
+import { track } from './analytics.ts';
 
 const UPBIT_CANDLES = 'https://api.upbit.com/v1/candles';
 const CANDLE_COUNT = 200;
@@ -166,6 +167,7 @@ export function initPriceChart() {
       const next = btn.dataset.interval;
       if (!next || !INTERVALS[next] || next === interval) return;
       interval = next;
+      track('chart_interval', { interval, symbol });
       document.querySelectorAll('.interval-btn[data-interval]').forEach((b) => b.classList.toggle('active', b === btn));
       lastCandle = null;
       loadCandles();

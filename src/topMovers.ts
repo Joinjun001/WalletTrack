@@ -6,6 +6,7 @@ import { selectChartCoin } from './priceChart.ts';
 import { escapeHtml } from './txAnalysis.ts';
 import { coinName } from './coins.ts';
 import { formatKrwPrice, formatSignedPct, topMovers } from './market.ts';
+import { track } from './analytics.ts';
 
 const UPBIT_TICKER_ALL = 'https://api.upbit.com/v1/ticker/all?quote_currencies=KRW';
 const REFRESH_MS = 30 * 1000;
@@ -53,6 +54,7 @@ export function initTopMovers() {
       const item = (e.target as HTMLElement).closest<HTMLElement>('[data-symbol]');
       if (!item?.dataset.symbol) return;
       selectChartCoin(item.dataset.symbol);
+      track('chart_coin', { symbol: item.dataset.symbol, from: ul.id === 'movers-up' ? 'movers_up' : 'movers_down' });
       // 코인 표에 없는 코인이면 표의 선택 표시를 지운다
       document.querySelectorAll('#coin-table-body tr').forEach((r) => r.classList.toggle('selected', (r as HTMLElement).dataset.symbol === item.dataset.symbol));
       document.querySelector('.chart-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
