@@ -31,12 +31,17 @@ mempool.space / 바이낸스 / 업비트
 | `GET /api/kimchi?symbol=BTC&hours=24` | 김프 추이 |
 | `GET /api/liquidations/by-symbol?hours=24&limit=10` | 코인별 청산 합계 순위 |
 | `GET /api/whales/flow?hours=24` | 고래 거래 입금·출금·전송 합계 |
+| `GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...]` | 업비트 캔들 중계 (`to` 이전 200개, 차트 과거 불러오기) |
+| `GET /api/upbit/tickers` | 업비트 원화 마켓 전체 시세 중계 |
+| `GET /api/upbit/markets` | 업비트 원화 마켓 목록·한글 이름 중계 |
 | `POST /api/events` | 웹 익명 사용 기록 (1분에 120번까지) |
 | `POST /api/feedback` | 사이트 "의견 보내기" (10분에 5번까지) |
 
 사용 기록은 브라우저마다 만든 무작위 ID로만 구분하고 IP 등 개인정보는 저장하지 않는다 (`usage_events`, 180일 보관). 의견은 `feedback`에 기한 없이 보관한다. 분석 쿼리는 `db/usage-queries.sql`.
 
 시각은 모두 밀리초 타임스탬프. 기간이 길면(1일 초과) 평균을 내서 점 개수를 줄인다.
+
+업비트 중계(`upbitProxy.ts`): 업비트는 브라우저 요청(Origin 헤더)을 출처별로 아주 적게만 받아서 웹이 직접 부르면 429로 막힌다. 서버가 대신 받아 3초(지난 캔들은 10분, 마켓 목록은 1시간) 캐시한다.
 
 ## 배포 (OCI A1, Ubuntu 기준)
 
@@ -127,6 +132,10 @@ git pull && docker compose up -d --build
 
 # DB 접속
 docker compose exec db psql -U wallettrack
+
+# 과거 기록 채우기 (처음 설치했거나 수집이 오래 멈췄을 때 한 번): 가장 오래된 기록 이전의
+# 김프(1시간 간격, 기본 90일)와 선물 지표(1시간 간격, 바이낸스 제한으로 30일)를 거래소 과거 데이터로 채운다
+docker compose run --rm --build collector node src/backfill.ts 90
 
 # 사용 기록·의견 요약 보기
 docker compose exec -T db psql -U wallettrack < db/usage-queries.sql

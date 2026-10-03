@@ -1,0 +1,39 @@
+# WalletTrack 작업 규칙
+
+한국 사용자용 비트코인·코인 실시간 대시보드. **데스크톱 브라우저(1440×900) 기준**으로 만들고, 모바일은 깨지지 않게만 유지한다.
+코드 주석, 커밋 메시지, 화면 문구는 한국어.
+
+## 구조
+
+| 부분 | 위치 | 배포 |
+|---|---|---|
+| 웹 (Vite + TS, 프레임워크 없음) | `index.html`, `src/` | `main`에 푸시하면 Vercel이 자동 배포 (https://wallet-track-theta.vercel.app) |
+| 수집기·기록 API·업비트 중계 | `server/` | 이 서버(OCI)에서 `cd server && docker compose up -d --build api` (수집기를 바꿨으면 `collector`도) |
+
+- 서버는 웹의 `src/txAnalysis.ts`, `src/market.ts`, `src/coins.ts`를 같이 쓴다. 서버가 다른 `src/` 파일을 쓰게 되면 `server/Dockerfile`의 `COPY`에도 추가한다.
+- **업비트 REST(시세·캔들·마켓 목록)는 브라우저에서 직접 부르지 않는다.** 업비트가 출처(Origin)별로 막아서 429가 난다. `historyApi.ts`의 `getUpbit()`로 서버 중계(`/api/upbit/...`)를 거친다. 업비트 WebSocket은 직접 써도 된다.
+- 기록 추이·청산 통계·거래소 흐름은 **서버 DB에 쌓인 만큼만** 보인다. 기간이 짧게 보이면 `server/src/backfill.ts`로 거래소 과거 데이터를 채울 수 있는지 본다.
+
+## 고칠 때: 같은 원인이 있는 곳을 모두 확인한다
+
+버그를 하나 고치면 **같은 원인이 있을 만한 곳을 전부 찾아보고, 확인한 목록과 결과를 보고에 적는다.** 한 곳만 고치고 끝내지 않는다.
+
+자주 겹치는 묶음:
+- **차트**: `priceChart.ts`(가격), `historyCharts.ts`(김프·선물 추이). 데이터 범위·갱신·테마 색 문제는 셋 다 확인한다.
+- **외부 API 호출**: `grep -rn "fetch(\|new WebSocket" src server/src`로 전부 확인 (지역 제한 451, 요청 제한 429, 재연결).
+- **실시간 목록**: 고래 피드, 강제청산 피드, 코인 사이드바.
+- **CSS 반응형**: 같은 선택자를 덮어쓰는 `@media` 규칙이 파일 뒤쪽에 있으면 앞의 좁은 화면 규칙을 이긴다. 레이아웃을 바꾸면 1440 / 1200 / 960 / 390px을 모두 확인한다.
+
+## 화면을 바꿀 때 체크리스트
+
+1. `npm run typecheck && npm test && npm run build`
+2. 1440×900 다크·라이트에서 확인하고, 390px 모바일이 깨지지 않았는지 본다 (Playwright 캡처를 직접 열어 본다).
+3. `npm run screenshots`로 `image/` 스크린샷을 다시 찍는다.
+4. `README.md`의 기능 설명과 프로젝트 구조를 현재 화면에 맞게 고친다. 서버 API를 바꿨으면 `server/README.md`의 API 표도.
+5. 초보자가 모를 용어가 새로 나오면 `src/help.ts`에 설명을 넣고 제목에 `data-help`를 붙인다.
+
+## 커밋·배포
+
+- 이 서버에는 git 작성자가 설정돼 있지 않다: `git -c user.name=joinjun001 -c user.email=109087027+Joinjun001@users.noreply.github.com commit ...`
+- 작업 브랜치 `feat/market-tools`와 `main`이 같은 커밋을 가리키게 둘 다 푸시한다 (`git push origin HEAD:main && git push origin HEAD`).
+- 푸시 후 실제 사이트에 반영됐는지 확인한다.

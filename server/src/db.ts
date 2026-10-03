@@ -30,3 +30,8 @@ export async function migrate() {
   await pool.query(sql);
   log('DB 스키마 확인 완료');
 }
+
+/** 한 번 실행하고 끝나는 스크립트(backfill.ts)용 */
+export async function closeDb() {
+  await pool?.end();
+}

@@ -1267,6 +1267,8 @@ body {
 }
 
 @media (max-width: 960px) {
+  /* 위 1200px 규칙이 뒤에 있어 덮어쓰므로 한 줄 배치를 다시 지정한다 */
+  .dashboard { grid-template-columns: minmax(0, 1fr); }
   .coin-sidebar { grid-column: auto; order: -2; }
   .futures-strip { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
   .futures-strip .strip-item { border-left: none; }
