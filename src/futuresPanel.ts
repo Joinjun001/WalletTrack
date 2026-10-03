@@ -16,6 +16,14 @@ const REFRESH_MS = 30 * 1000;
 const MIN_LIQUIDATION_USD = 1_000; // 목록에는 이 이상만 (합계는 전부 포함)
 const MAX_LIQUIDATION_ITEMS = 40;
 
+type LiquidationListener = (position: 'long' | 'short', usd: number, symbol: string) => void;
+const liquidationListeners: LiquidationListener[] = [];
+
+/** 실시간으로 들어온 강제청산 (서버 기록은 포함하지 않는다). 사운드 알림이 쓴다 */
+export function onLiveLiquidation(fn: LiquidationListener) {
+  liquidationListeners.push(fn);
+}
+
 let nextFundingTime = 0;
 let longLiquidatedUsd = 0;
 let shortLiquidatedUsd = 0;
@@ -129,6 +137,7 @@ function onLiquidation(order: ForceOrder['o']) {
   if (position === 'long') longLiquidatedUsd += usd;
   else shortLiquidatedUsd += usd;
   renderTotals();
+  for (const fn of liquidationListeners) fn(position, usd, order.s);
 
   if (usd >= MIN_LIQUIDATION_USD) prependLiquidation(order.s, position, usd, order.T);
 }

@@ -57,6 +57,7 @@
             </div>
           </div>
           <div id="price-chart" class="price-chart"></div>
+          <p id="price-chart-status" class="table-note" hidden>차트를 불러오지 못했어요. 잠시 후 다시 시도할게요.</p>
         </div>
 
         <nav class="tab-bar" role="tablist">
@@ -321,6 +322,32 @@
             </select>
           </label>
           <p class="tool-note">이 페이지가 열려 있을 때만, 10초에 한 번까지 알려요</p>
+        </div>
+
+        <div class="info-card glass-panel tool-card">
+          <h2 class="info-title">🔊 사운드 알림 <span class="info-unit">바이낸스 선물</span></h2>
+          <label class="calc-row whale-alert-row">
+            <span>청산</span>
+            <select id="liq-sound-threshold">
+              <option value="0">끄기</option>
+              <option value="10000">$10K 이상</option>
+              <option value="50000">$50K 이상</option>
+              <option value="100000">$100K 이상</option>
+              <option value="1000000">$1M 이상</option>
+            </select>
+          </label>
+          <label class="calc-row whale-alert-row">
+            <span>체결</span>
+            <select id="trade-sound-threshold">
+              <option value="0">끄기</option>
+              <option value="100000">BTC $100K 이상</option>
+              <option value="500000">BTC $500K 이상</option>
+              <option value="1000000">BTC $1M 이상</option>
+              <option value="5000000">BTC $5M 이상</option>
+            </select>
+          </label>
+          <button id="sound-alert-test" type="button" class="alert-add-btn sound-test-btn">미리 듣기</button>
+          <p id="sound-alert-note" class="tool-note"></p>
         </div>
       </aside>
     </div>

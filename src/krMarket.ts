@@ -6,6 +6,7 @@ import { prices, subscribePrices, updatePrices } from './priceStore.ts';
 import type { Prices } from './priceStore.ts';
 import { kimchiPremium, formatKrw, formatSignedPct, fearGreedLabelKo } from './market.ts';
 import { COINS } from './coins.ts';
+import { getUpbit } from './historyApi.ts';
 
 // BTC/USDT는 상단 바, 나머지는 코인 시세 표와 차트가 함께 쓴다 (업비트 연결 하나로 공유)
 const UPBIT_CODES = Array.from(new Set(['KRW-BTC', 'KRW-USDT', ...COINS.map((c) => `KRW-${c.symbol}`)]));
@@ -50,14 +51,10 @@ function applyUpbitTicker(t: UpbitTicker) {
 }
 
 async function fetchUpbitOnce() {
-  try {
-    const res = await fetch(UPBIT_REST);
-    if (!res.ok) return;
-    const list: UpbitTicker[] = await res.json();
-    list.forEach(applyUpbitTicker);
-  } catch (e) {
-    console.warn('Upbit REST failed:', e);
-  }
+  // 서버 중계는 원화 마켓 전체를 주므로 필요한 것만 쓴다
+  const wanted = new Set(UPBIT_CODES);
+  const list = await getUpbit<UpbitTicker[]>('/upbit/tickers', UPBIT_REST);
+  list?.filter((t) => t.market && wanted.has(t.market)).forEach(applyUpbitTicker);
 }
 
 function connectUpbitWebSocket() {

@@ -9,6 +9,7 @@
  * GET /api/whales/flow?hours=24
  * GET /api/futures?symbol=BTCUSDT&hours=24
  * GET /api/kimchi?symbol=BTC&hours=24
+ * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200, /api/upbit/tickers: 업비트 시세 중계 (upbitProxy.ts)
  *
  * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts)
  */
@@ -18,6 +19,7 @@ import type { IncomingMessage } from 'node:http';
 import { config, log } from './config.ts';
 import { query } from './db.ts';
 import { BadRequest, rateLimiter, saveEvents, saveFeedback } from './usage.ts';
+import { UpstreamError, upbitCandles, upbitTickers } from './upbitProxy.ts';
 
 type Params = URLSearchParams;
 
@@ -166,7 +168,10 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
       [symbolParam(q, 'BTC'), hours, bucketMinutes(hours, 1)]
     );
     return rows.map((r) => ({ t: ms(r.t), premiumPct: r.premium_pct }));
-  }
+  },
+
+  '/api/upbit/candles': async (q) => upbitCandles(q),
+  '/api/upbit/tickers': async () => upbitTickers()
 };
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -243,13 +248,16 @@ const server = createServer(async (req, res) => {
   }
   if (req.method !== 'GET') return send(405, { error: 'method not allowed' });
 
-  const handler = routes[url.pathname.replace(/\/$/, '')];
+  const pathname = url.pathname.replace(/\/$/, '');
+  const handler = routes[pathname];
   if (!handler) return send(404, { error: 'not found' });
+  // 업비트 중계는 실시간 시세라 브라우저·프록시 캐시를 짧게
+  if (pathname.startsWith('/api/upbit/')) headers['Cache-Control'] = 'public, max-age=2';
 
   try {
     send(200, await handler(url.searchParams));
   } catch (e) {
-    if (e instanceof HttpError) return send(e.status, { error: e.message });
+    if (e instanceof HttpError || e instanceof UpstreamError) return send(e.status, { error: e.message });
     log(`${url.pathname} 실패:`, e);
     send(500, { error: 'internal error' });
   }

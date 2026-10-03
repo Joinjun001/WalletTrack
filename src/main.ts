@@ -10,6 +10,7 @@ import { initTools } from './tools.ts';
 import { initHistoryCharts } from './historyCharts.ts';
 import { initHistoryStats } from './historyStats.ts';
 import { initTopMovers } from './topMovers.ts';
+import { initSoundAlerts } from './soundAlerts.ts';
 
 function initTabs() {
   const buttons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
@@ -37,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initNetworkPanel();
   initFuturesPanel();
   initTools();
+  initSoundAlerts();
   initLiveStreamDashboard();
   initTopMovers();
   initHistoryStats();

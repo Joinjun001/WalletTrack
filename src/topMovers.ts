@@ -7,6 +7,7 @@ import { escapeHtml } from './txAnalysis.ts';
 import { coinName } from './coins.ts';
 import { formatKrwPrice, formatSignedPct, topMovers } from './market.ts';
 import { track } from './analytics.ts';
+import { getUpbit } from './historyApi.ts';
 
 const UPBIT_TICKER_ALL = 'https://api.upbit.com/v1/ticker/all?quote_currencies=KRW';
 const REFRESH_MS = 30 * 1000;
@@ -33,19 +34,14 @@ function renderList(id: string, list: Mover[]) {
 }
 
 async function refresh() {
-  try {
-    const res = await fetch(UPBIT_TICKER_ALL);
-    if (!res.ok) return;
-    const list: { market: string; trade_price: number; signed_change_rate: number; acc_trade_price_24h: number }[] = await res.json();
-    const movers = list
-      .filter((t) => t.acc_trade_price_24h >= MIN_VOLUME_KRW)
-      .map((t) => ({ symbol: t.market.replace(/^KRW-/, ''), price: t.trade_price, changePct: t.signed_change_rate * 100 }));
-    const { gainers, losers } = topMovers(movers, TOP_N);
-    renderList('movers-up', gainers);
-    renderList('movers-down', losers);
-  } catch (e) {
-    console.warn('Upbit ticker/all failed:', e);
-  }
+  const list = await getUpbit<{ market: string; trade_price: number; signed_change_rate: number; acc_trade_price_24h: number }[]>('/upbit/tickers', UPBIT_TICKER_ALL);
+  if (!list) return;
+  const movers = list
+    .filter((t) => t.acc_trade_price_24h >= MIN_VOLUME_KRW)
+    .map((t) => ({ symbol: t.market.replace(/^KRW-/, ''), price: t.trade_price, changePct: t.signed_change_rate * 100 }));
+  const { gainers, losers } = topMovers(movers, TOP_N);
+  renderList('movers-up', gainers);
+  renderList('movers-down', losers);
 }
 
 export function initTopMovers() {

@@ -9,10 +9,12 @@ import { coinName } from './coins.ts';
 import { applyTick, candleTimeOf, krwPricePrecision, KST_OFFSET_SEC } from './market.ts';
 import type { Candle } from './market.ts';
 import { track } from './analytics.ts';
+import { getUpbit } from './historyApi.ts';
 
 const UPBIT_CANDLES = 'https://api.upbit.com/v1/candles';
 const CANDLE_COUNT = 200;
 const REFRESH_MS = 60 * 1000; // 거래량 등 실시간으로 못 받는 값을 맞추기 위한 재조회
+const CANDLE_RETRY_MS = 5 * 1000;
 
 const INTERVALS: Record<string, { path: string; seconds: number }> = {
   '1m': { path: 'minutes/1', seconds: 60 },
@@ -61,22 +63,26 @@ function volumeBar(c: UpbitCandle, time: number) {
 
 async function fetchCandles(count: number): Promise<UpbitCandle[] | null> {
   const key = `${symbol}|${interval}`;
-  try {
-    const res = await fetch(`${UPBIT_CANDLES}/${INTERVALS[interval].path}?market=KRW-${symbol}&count=${count}`);
-    if (!res.ok) return null;
-    const list: UpbitCandle[] = await res.json();
-    // 그 사이 코인/간격이 바뀌었으면 버린다
-    return key === `${symbol}|${interval}` ? list.reverse() : null;
-  } catch (e) {
-    console.warn('Upbit candles failed:', e);
-    return null;
-  }
+  const unit = INTERVALS[interval].path;
+  const list = await getUpbit<UpbitCandle[]>(
+    `/upbit/candles?unit=${unit}&market=KRW-${symbol}&count=${count}`,
+    `${UPBIT_CANDLES}/${unit}?market=KRW-${symbol}&count=${count}`
+  );
+  // 그 사이 코인/간격이 바뀌었으면 버린다
+  return list && key === `${symbol}|${interval}` ? list.slice().reverse() : null;
 }
 
 async function loadCandles() {
   if (!candleSeries || !volumeSeries) return;
+  const status = document.getElementById('price-chart-status');
   const list = await fetchCandles(CANDLE_COUNT);
-  if (!list || list.length === 0) return;
+  if (!list || list.length === 0) {
+    // 일시적으로 못 받으면 잠시 뒤 다시 시도한다 (빈 차트로 남지 않게)
+    if (status) status.hidden = false;
+    setTimeout(() => { if (!lastCandle) loadCandles(); }, CANDLE_RETRY_MS);
+    return;
+  }
+  if (status) status.hidden = true;
 
   const candles = list.map(toCandle);
   pricePrecision = krwPricePrecision(candles[candles.length - 1].close);

@@ -56,6 +56,24 @@ export interface FuturesPoint {
   longRatio: number | null;    // 0~1
 }
 
+/**
+ * 업비트 시세는 서버 중계(/api/upbit/...)로 받는다. 업비트가 브라우저 요청을 출처별로 아주 적게만 받아서
+ * 직접 부르면 페이지를 열 때 429로 막히기 쉽다. 서버가 응답하지 않을 때만 업비트에 직접 요청한다.
+ */
+export async function getUpbit<T>(serverPath: string, directUrl: string): Promise<T | null> {
+  const viaServer = await getHistory<T>(serverPath);
+  if (viaServer !== null) return viaServer;
+  try {
+    const res = await fetch(directUrl);
+    if (res.ok) return (await res.json()) as T;
+    trackOnce('api_fail', `upbit:${res.status}`, { source: 'upbit', status: res.status, path: serverPath.split('?')[0] });
+    return null;
+  } catch (e) {
+    console.warn(`Upbit ${directUrl} failed:`, e);
+    return null;
+  }
+}
+
 export async function getHistory<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${HISTORY_API}${path}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });
