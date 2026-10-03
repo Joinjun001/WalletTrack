@@ -4,6 +4,8 @@
 
 import { escapeHtml } from './txAnalysis.ts';
 import { formatCountdown, formatFundingRate, formatUsdShort, liquidatedPosition } from './market.ts';
+import { getHistory } from './historyApi.ts';
+import type { LiquidationRecord, LiquidationSummary } from './historyApi.ts';
 
 const FAPI = 'https://fapi.binance.com';
 // 바이낸스 선물 시장 데이터 스트림은 /market 경로 (예전 /ws 경로는 연결만 되고 데이터가 오지 않는다)
@@ -80,25 +82,32 @@ interface ForceOrder {
   o: { s: string; S: string; ap: string; z: string; T: number };
 }
 
+function renderTotals() {
+  setText('liq-long-total', formatUsdShort(longLiquidatedUsd));
+  setText('liq-short-total', formatUsdShort(shortLiquidatedUsd));
+}
+
 function onLiquidation(order: ForceOrder['o']) {
   const usd = parseFloat(order.ap) * parseFloat(order.z);
   if (!(usd > 0)) return;
   const position = liquidatedPosition(order.S);
   if (position === 'long') longLiquidatedUsd += usd;
   else shortLiquidatedUsd += usd;
-  setText('liq-long-total', formatUsdShort(longLiquidatedUsd));
-  setText('liq-short-total', formatUsdShort(shortLiquidatedUsd));
+  renderTotals();
 
-  if (usd < MIN_LIQUIDATION_USD) return;
+  if (usd >= MIN_LIQUIDATION_USD) prependLiquidation(order.s, position, usd, order.T);
+}
+
+function prependLiquidation(symbol: string, position: 'long' | 'short', usd: number, timestamp: number) {
   const list = document.getElementById('liq-feed');
   if (!list) return;
   list.querySelector('.liq-empty')?.remove();
 
   const item = document.createElement('li');
   item.className = `liq-item ${position}${usd >= 1e6 ? ' big' : ''}`;
-  const time = new Date(order.T).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const time = new Date(timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   item.innerHTML = `
-    <span class="liq-symbol">${escapeHtml(order.s.replace(/USDT$/, ''))}</span>
+    <span class="liq-symbol">${escapeHtml(symbol.replace(/USDT$/, ''))}</span>
     <span class="liq-side">${position === 'long' ? '롱 청산' : '숏 청산'}</span>
     <span class="liq-usd">${formatUsdShort(usd)}</span>
     <span class="liq-time">${time}</span>`;
@@ -119,9 +128,27 @@ function connectLiquidationWebSocket() {
   ws.onclose = () => setTimeout(connectLiquidationWebSocket, 3000);
 }
 
-export function initFuturesPanel() {
+/** 서버에 쌓인 최근 24시간 청산 기록과 합계. 서버가 응답하지 않으면 페이지를 연 뒤부터만 집계한다 */
+async function loadLiquidationHistory() {
+  const [records, summary] = await Promise.all([
+    getHistory<LiquidationRecord[]>(`/liquidations?hours=24&minUsd=${MIN_LIQUIDATION_USD}&limit=${MAX_LIQUIDATION_ITEMS}`),
+    getHistory<LiquidationSummary>('/liquidations/summary?hours=24')
+  ]);
+  // 기록은 최신순이므로 오래된 것부터 앞에 붙여야 최신이 맨 위로 온다
+  records?.slice().reverse().forEach((r) => prependLiquidation(r.symbol, r.position, r.usd, r.occurredAt));
+  if (summary) {
+    longLiquidatedUsd = summary.longUsd;
+    shortLiquidatedUsd = summary.shortUsd;
+    renderTotals();
+    setText('liq-totals-note', '최근 24시간 + 실시간');
+  }
+}
+
+export async function initFuturesPanel() {
   refresh();
   setInterval(refresh, REFRESH_MS);
   setInterval(renderCountdown, 1000);
+  // 기록을 먼저 받고 실시간 연결을 열어야 같은 청산이 합계에 두 번 들어가지 않는다
+  await loadLiquidationHistory();
   connectLiquidationWebSocket();
 }

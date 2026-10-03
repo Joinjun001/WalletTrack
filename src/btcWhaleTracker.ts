@@ -3,10 +3,12 @@
  * Extreme Speed WebSocket Engine with Exchange Address Matching
  */
 
-import { analyzeTransaction, escapeHtml } from './txAnalysis.ts';
-import type { RawTx, TxDirection } from './txAnalysis.ts';
+import { analyzeTransaction, escapeHtml, KNOWN_EXCHANGES } from './txAnalysis.ts';
+import type { ExchangeWallet, RawTx, TxDirection } from './txAnalysis.ts';
 import { prices, updatePrices } from './priceStore.ts';
 import { formatKrwShort, formatSignedPct } from './market.ts';
+import { getHistory } from './historyApi.ts';
+import type { WhaleRecord } from './historyApi.ts';
 
 export interface LiveBtcTransaction {
   id: string;
@@ -163,6 +165,39 @@ export async function initLiveStreamDashboard() {
 
   // Connect High Speed WebSocket
   connectWebSocket(feedContainer, countElem, totalVolElem);
+
+  // 서버에 쌓인 최근 24시간 기록을 실시간 피드 뒤에 붙인다 (서버가 응답하지 않으면 건너뜀)
+  loadWhaleHistory(feedContainer, countElem, totalVolElem);
+}
+
+async function loadWhaleHistory(container: HTMLElement | null, countElem: HTMLElement | null, totalVolElem: HTMLElement | null) {
+  const records = await getHistory<WhaleRecord[]>(`/whales?hours=24&minBtc=${MIN_STORED_BTC}&limit=${MAX_HISTORY_ITEMS}`);
+  if (!records?.length) return;
+
+  const seen = new Set(txHistory.map(t => t.hash));
+  const added = records
+    .filter(r => !seen.has(r.hash))
+    .map(r => toLiveTx(r.hash, r.btcAmount, r.direction, (r.exchangeAddress && KNOWN_EXCHANGES[r.exchangeAddress]) || null, r.detectedAt));
+  if (added.length === 0) return;
+
+  totalVolumeObservedBtc += added.reduce((sum, t) => sum + t.btcAmount, 0);
+  txHistory = [...txHistory, ...added].sort((a, b) => b.timestamp - a.timestamp).slice(0, MAX_HISTORY_ITEMS);
+  renderFeed(container, countElem, totalVolElem);
+}
+
+function toLiveTx(hash: string, btcAmount: number, direction: TxDirection, exchange: ExchangeWallet | null, timestamp: number): LiveBtcTransaction {
+  return {
+    id: hash.substring(0, 10),
+    hash,
+    btcAmount,
+    direction,
+    timestamp,
+    exchangeName: exchange ? exchange.name : '미확인 지갑',
+    exchangeIcon: exchange ? exchange.icon : '🏛️ Wallet',
+    exchangeColor: exchange ? exchange.color : '#8A99AD',
+    isKnownExchange: !!exchange,
+    isWhale: btcAmount >= WHALE_BTC
+  };
 }
 
 /**
@@ -215,19 +250,9 @@ function connectWebSocket(container: HTMLElement | null, countElem: HTMLElement 
 function processTransaction(txData: RawTx, container: HTMLElement | null, countElem: HTMLElement | null, totalVolElem: HTMLElement | null) {
   const { hash, btcAmount, direction, exchange } = analyzeTransaction(txData);
   if (btcAmount < MIN_STORED_BTC) return; // Filter small micro-txs for speed & relevance
+  if (txHistory.some(t => t.hash === hash)) return; // 서버 기록으로 이미 받은 거래
 
-  const item: LiveBtcTransaction = {
-    id: hash.substring(0, 10),
-    hash,
-    btcAmount,
-    direction,
-    timestamp: Date.now(),
-    exchangeName: exchange ? exchange.name : '미확인 지갑',
-    exchangeIcon: exchange ? exchange.icon : '🏛️ Wallet',
-    exchangeColor: exchange ? exchange.color : '#8A99AD',
-    isKnownExchange: !!exchange,
-    isWhale: btcAmount >= WHALE_BTC
-  };
+  const item = toLiveTx(hash, btcAmount, direction, exchange, Date.now());
 
   txHistory.unshift(item);
   if (txHistory.length > MAX_HISTORY_ITEMS) {
@@ -254,6 +279,14 @@ const DIRECTION_TAGS: Record<TxDirection, string> = {
   transfer: '<span class="tag transfer">↔️ 전송</span>'
 };
 
+/** 1분 안이면 "방금 전", 그 외에는 감지 시각 (오늘이 아니면 날짜 포함) */
+function timeLabel(timestamp: number): string {
+  if (Date.now() - timestamp < 60_000) return '방금 전';
+  const date = new Date(timestamp);
+  const time = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  return date.toDateString() === new Date().toDateString() ? time : `${date.getMonth() + 1}/${date.getDate()} ${time}`;
+}
+
 /**
  * Prepend card UI to stream container
  */
@@ -278,7 +311,7 @@ function prependItemToUi(container: HTMLElement | null, item: LiveBtcTransaction
         </span>
         ${DIRECTION_TAGS[item.direction]}
         ${item.isWhale ? `<span class="whale-badge">🐋 WHALE!</span>` : ''}
-        <span class="tx-time-ago">방금 전</span>
+        <span class="tx-time-ago">${timeLabel(item.timestamp)}</span>
       </div>
       <div class="tx-hash-row">
         <span>지갑/거래소: <strong>${escapeHtml(item.exchangeName)}</strong></span>
