@@ -1146,3 +1146,46 @@ body {
   .history-chart { height: 240px; }
   .chart-head .interval-group { flex-wrap: wrap; }
 }
+
+/* 용어 설명 ? 버튼 (help.ts) */
+.help-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.help-btn {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font-family: var(--font-family);
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.help-btn:hover, .help-btn[aria-expanded="true"] {
+  border-color: var(--btc-gold);
+  color: var(--btc-gold);
+}
+
+.help-popover {
+  position: absolute;
+  z-index: 60;
+  width: min(300px, calc(100vw - 16px));
+  padding: 0.75rem 0.9rem;
+  background: var(--dialog-bg);
+  border-color: var(--line-strong);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.help-popover[hidden] { display: none; }
+.help-popover strong { display: block; margin-bottom: 0.25rem; font-size: 0.85rem; }
+.help-popover p { color: var(--text-muted); }

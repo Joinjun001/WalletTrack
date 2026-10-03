@@ -43,11 +43,11 @@
           <span class="stat-value"><span id="usd-btc-price">-</span> <span id="usd-change" class="stat-sub" title="24시간 변동">-</span></span>
         </div>
         <div class="stat">
-          <span class="stat-label" title="업비트 원화 가격 ÷ (해외 달러 가격 × 업비트 USDT 가격) - 1">김치 프리미엄</span>
+          <span class="stat-label" data-help="kimchi">김치 프리미엄</span>
           <span id="kimchi-premium" class="stat-value">-</span>
         </div>
         <div class="stat">
-          <span class="stat-label">공포·탐욕 지수</span>
+          <span class="stat-label" data-help="fearGreed">공포·탐욕 지수</span>
           <span id="fear-greed" class="stat-value">-</span>
         </div>
       </div>
@@ -94,7 +94,7 @@
           </div>
 
           <div id="whale-flow" class="whale-flow glass-panel" hidden>
-            <span class="flow-title">24시간 거래소 흐름 <span class="info-unit">알려진 거래소 지갑 기준</span></span>
+            <span class="flow-title" data-help="whaleFlow">24시간 거래소 흐름 <span class="info-unit">알려진 거래소 지갑 기준</span></span>
             <span>📥 입금 <strong id="whale-flow-deposit">-</strong></span>
             <span>📤 출금 <strong id="whale-flow-withdrawal">-</strong></span>
             <span title="입금 - 출금. 양수면 거래소로 들어온 코인이 더 많아요">순유입 <strong id="whale-flow-net">-</strong></span>
@@ -144,24 +144,24 @@
           <p id="futures-status" class="table-note" hidden>바이낸스 선물 데이터를 불러오지 못했어요 (일부 지역에서는 접속이 막혀 있어요)</p>
           <div class="futures-grid">
             <div class="info-card glass-panel">
-              <h2 class="info-title">💸 펀딩비 <span class="info-unit">BTCUSDT 무기한</span></h2>
+              <h2 class="info-title" data-help="funding">💸 펀딩비 <span class="info-unit">BTCUSDT 무기한</span></h2>
               <div class="info-main" id="fut-funding">-</div>
               <div class="info-sub" id="fut-funding-countdown">-</div>
             </div>
             <div class="info-card glass-panel">
-              <h2 class="info-title">📦 미결제약정 <span class="info-unit">OI</span></h2>
+              <h2 class="info-title" data-help="oi">📦 미결제약정 <span class="info-unit">OI</span></h2>
               <div class="info-main" id="fut-oi">-</div>
               <div class="info-sub" id="fut-oi-usd">-</div>
             </div>
             <div class="info-card glass-panel">
-              <h2 class="info-title">⚖️ 롱/숏 비율 <span class="info-unit">계정 수, 5분</span></h2>
+              <h2 class="info-title" data-help="longShort">⚖️ 롱/숏 비율 <span class="info-unit">계정 수, 5분</span></h2>
               <div class="ls-bar"><div id="fut-ls-bar" class="ls-bar-long"></div></div>
               <div class="ls-labels"><span id="fut-long-pct" class="up">-</span><span id="fut-short-pct" class="down">-</span></div>
             </div>
           </div>
 
           <div class="glass-panel table-card card-gap">
-            <h2 class="info-title table-title">💸 코인별 펀딩비 <span class="info-unit">바이낸스 무기한 · 30초마다 갱신</span></h2>
+            <h2 class="info-title table-title" data-help="fundingTable">💸 코인별 펀딩비 <span class="info-unit">바이낸스 무기한 · 30초마다 갱신</span></h2>
             <table class="coin-table static-table">
               <thead>
                 <tr>
@@ -177,7 +177,7 @@
           </div>
 
           <div class="glass-panel liq-card card-gap">
-            <h2 class="info-title">📊 청산 통계 <span class="info-unit">서버 기록 · 1분마다 갱신</span></h2>
+            <h2 class="info-title" data-help="liqStats">📊 청산 통계 <span class="info-unit">서버 기록 · 1분마다 갱신</span></h2>
             <p id="liq-stats-status" class="table-note" hidden>기록 서버에 연결할 수 없어요</p>
             <div class="liq-stats-grid">
               <table class="coin-table static-table">
@@ -199,7 +199,7 @@
 
           <div class="glass-panel liq-card">
             <div class="liq-head">
-              <h2 class="info-title">🔥 실시간 강제청산 <span class="info-unit">바이낸스 선물 전체 · $1K 이상</span></h2>
+              <h2 class="info-title" data-help="liquidations">🔥 실시간 강제청산 <span class="info-unit">바이낸스 선물 전체 · $1K 이상</span></h2>
               <div class="liq-totals">
                 <span>롱 청산 <strong id="liq-long-total" class="down">$0</strong></span>
                 <span>숏 청산 <strong id="liq-short-total" class="up">$0</strong></span>
@@ -215,7 +215,7 @@
         <div class="tab-panel" role="tabpanel" data-panel="history" hidden>
           <div class="chart-card glass-panel history-card">
             <div class="chart-head">
-              <h2 class="chart-title">🌶️ 김치 프리미엄 추이</h2>
+              <h2 class="chart-title" data-help="kimchiHistory">🌶️ 김치 프리미엄 추이</h2>
               <div class="interval-group">
                 <select id="kimchi-coin" class="history-select" aria-label="코인"></select>
                 <button class="interval-btn active" data-hours="24">24시간</button>
@@ -229,7 +229,7 @@
 
           <div class="chart-card glass-panel history-card">
             <div class="chart-head">
-              <h2 class="chart-title">📉 선물 지표 추이</h2>
+              <h2 class="chart-title" data-help="futuresHistory">📉 선물 지표 추이</h2>
               <div class="interval-group">
                 <select id="futures-symbol" class="history-select" aria-label="종목">
                   <option value="BTCUSDT">비트코인 BTCUSDT</option>
@@ -255,7 +255,7 @@
       <!-- 네트워크 & 시장 패널 -->
       <aside class="side-column">
         <div class="info-card glass-panel">
-          <h2 class="info-title">⛽ 추천 수수료 <span class="info-unit">sat/vB</span></h2>
+          <h2 class="info-title" data-help="fee">⛽ 추천 수수료 <span class="info-unit">sat/vB</span></h2>
           <div class="fee-grid">
             <div><span class="fee-label">빠름</span><strong id="fee-fast">-</strong></div>
             <div><span class="fee-label">30분</span><strong id="fee-half">-</strong></div>
@@ -264,26 +264,26 @@
         </div>
 
         <div class="info-card glass-panel">
-          <h2 class="info-title">🧱 최근 블록 <span id="block-time" class="info-unit">-</span></h2>
+          <h2 class="info-title" data-help="block">🧱 최근 블록 <span id="block-time" class="info-unit">-</span></h2>
           <div class="info-main" id="block-height">-</div>
           <div class="info-sub"><span id="block-pool">-</span> · <span id="block-txs">-</span></div>
         </div>
 
         <div class="info-card glass-panel">
-          <h2 class="info-title">⏳ 다음 반감기</h2>
+          <h2 class="info-title" data-help="halving">⏳ 다음 반감기</h2>
           <div class="info-main" id="halving-days">-</div>
           <div class="info-sub" id="halving-blocks">-</div>
         </div>
 
         <div class="info-card glass-panel">
-          <h2 class="info-title">⚙️ 난이도 조정 <span id="difficulty-progress" class="info-unit">-</span></h2>
+          <h2 class="info-title" data-help="difficulty">⚙️ 난이도 조정 <span id="difficulty-progress" class="info-unit">-</span></h2>
           <div class="info-main" id="difficulty-change">-</div>
           <div class="progress-bar"><div id="difficulty-bar" class="progress-fill"></div></div>
           <div class="info-sub" id="difficulty-sub">-</div>
         </div>
 
         <div class="info-card glass-panel">
-          <h2 class="info-title">📮 대기 중 거래 <span class="info-unit">멤풀</span></h2>
+          <h2 class="info-title" data-help="mempool">📮 대기 중 거래 <span class="info-unit">멤풀</span></h2>
           <div class="info-main" id="mempool-count">-</div>
           <div class="info-sub" id="mempool-blocks">-</div>
         </div>
