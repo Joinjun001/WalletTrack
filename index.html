@@ -44,31 +44,104 @@
     </header>
 
     <div class="dashboard">
-      <!-- 고래 피드 -->
+      <!-- 차트 + 탭 (고래 피드 / 코인 시세 / 선물·청산) -->
       <section class="feed-column">
-        <div class="control-bar glass-panel">
-          <div class="control-left">
-            <span class="filter-label">거래량 필터:</span>
-            <button class="threshold-btn active" data-threshold="0.1">≥ 0.1 BTC</button>
-            <button class="threshold-btn" data-threshold="0.5">≥ 0.5 BTC</button>
-            <button class="threshold-btn" data-threshold="1.0">≥ 1.0 BTC</button>
-            <button class="threshold-btn whale-filter" data-threshold="3.0">🐋 ≥ 3.0 BTC</button>
+        <div class="chart-card glass-panel">
+          <div class="chart-head">
+            <h2 id="chart-title" class="chart-title">비트코인 BTC/KRW</h2>
+            <div class="interval-group">
+              <button class="interval-btn" data-interval="1m">1분</button>
+              <button class="interval-btn active" data-interval="15m">15분</button>
+              <button class="interval-btn" data-interval="1h">1시간</button>
+              <button class="interval-btn" data-interval="1d">일</button>
+            </div>
+          </div>
+          <div id="price-chart" class="price-chart"></div>
+        </div>
+
+        <nav class="tab-bar" role="tablist">
+          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="whale">🐋 고래 피드</button>
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="coins">🪙 코인 시세</button>
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="futures">💥 선물·청산</button>
+        </nav>
+
+        <div class="tab-panel" role="tabpanel" data-panel="whale">
+          <div class="control-bar glass-panel">
+            <div class="control-left">
+              <span class="filter-label">거래량 필터:</span>
+              <button class="threshold-btn active" data-threshold="0.1">≥ 0.1 BTC</button>
+              <button class="threshold-btn" data-threshold="0.5">≥ 0.5 BTC</button>
+              <button class="threshold-btn" data-threshold="1.0">≥ 1.0 BTC</button>
+              <button class="threshold-btn whale-filter" data-threshold="3.0">🐋 ≥ 3.0 BTC</button>
+            </div>
+
+            <div class="control-right">
+              <span id="live-tx-count" class="count-tag">0 건 감지</span>
+              <span class="vol-label">누적: <strong id="live-total-vol">0.00 BTC</strong></span>
+            </div>
           </div>
 
-          <div class="control-right">
-            <span id="live-tx-count" class="count-tag">0 건 감지</span>
-            <span class="vol-label">누적: <strong id="live-total-vol">0.00 BTC</strong></span>
+          <main class="stream-section">
+            <div id="live-tx-feed" class="live-feed-list">
+              <div class="empty-feed">
+                <div class="loading-spinner"></div>
+                <p>비트코인 블록체인 실시간 거래 수신 중...</p>
+              </div>
+            </div>
+          </main>
+        </div>
+
+        <div class="tab-panel" role="tabpanel" data-panel="coins" hidden>
+          <div class="glass-panel table-card">
+            <table class="coin-table">
+              <thead>
+                <tr>
+                  <th>코인</th>
+                  <th class="num">현재가</th>
+                  <th class="num">전일 대비</th>
+                  <th class="num" title="업비트 원화 가격 ÷ (바이낸스 달러 가격 × 업비트 USDT 가격) - 1">김프</th>
+                  <th class="num hide-mobile">거래대금(24h)</th>
+                </tr>
+              </thead>
+              <tbody id="coin-table-body"></tbody>
+            </table>
+            <p class="table-note">업비트 원화 마켓 · 바이낸스 USDT 마켓 실시간 · 행을 누르면 위 차트가 바뀌어요</p>
           </div>
         </div>
 
-        <main class="stream-section">
-          <div id="live-tx-feed" class="live-feed-list">
-            <div class="empty-feed">
-              <div class="loading-spinner"></div>
-              <p>비트코인 블록체인 실시간 거래 수신 중...</p>
+        <div class="tab-panel" role="tabpanel" data-panel="futures" hidden>
+          <p id="futures-status" class="table-note" hidden>바이낸스 선물 데이터를 불러오지 못했어요 (일부 지역에서는 접속이 막혀 있어요)</p>
+          <div class="futures-grid">
+            <div class="info-card glass-panel">
+              <h2 class="info-title">💸 펀딩비 <span class="info-unit">BTCUSDT 무기한</span></h2>
+              <div class="info-main" id="fut-funding">-</div>
+              <div class="info-sub" id="fut-funding-countdown">-</div>
+            </div>
+            <div class="info-card glass-panel">
+              <h2 class="info-title">📦 미결제약정 <span class="info-unit">OI</span></h2>
+              <div class="info-main" id="fut-oi">-</div>
+              <div class="info-sub" id="fut-oi-usd">-</div>
+            </div>
+            <div class="info-card glass-panel">
+              <h2 class="info-title">⚖️ 롱/숏 비율 <span class="info-unit">계정 수, 5분</span></h2>
+              <div class="ls-bar"><div id="fut-ls-bar" class="ls-bar-long"></div></div>
+              <div class="ls-labels"><span id="fut-long-pct" class="up">-</span><span id="fut-short-pct" class="down">-</span></div>
             </div>
           </div>
-        </main>
+
+          <div class="glass-panel liq-card">
+            <div class="liq-head">
+              <h2 class="info-title">🔥 실시간 강제청산 <span class="info-unit">바이낸스 선물 전체 · $1K 이상</span></h2>
+              <div class="liq-totals">
+                <span>롱 청산 <strong id="liq-long-total" class="down">$0</strong></span>
+                <span>숏 청산 <strong id="liq-short-total" class="up">$0</strong></span>
+              </div>
+            </div>
+            <ul id="liq-feed" class="liq-feed">
+              <li class="liq-empty">청산 주문을 기다리는 중... (합계는 페이지를 연 뒤부터 집계)</li>
+            </ul>
+          </div>
+        </div>
       </section>
 
       <!-- 네트워크 & 시장 패널 -->
@@ -99,9 +172,27 @@
           <div class="range-row"><span class="fee-label">고가</span><strong id="krw-high" class="up">-</strong></div>
           <div class="range-row"><span class="fee-label">저가</span><strong id="krw-low" class="down">-</strong></div>
         </div>
+        <div class="info-card glass-panel tool-card">
+          <h2 class="info-title">🧮 환산 계산기</h2>
+          <label class="calc-row"><span>BTC</span><input id="calc-btc" type="text" inputmode="decimal" autocomplete="off"></label>
+          <label class="calc-row"><span>sat</span><input id="calc-sats" type="text" inputmode="numeric" autocomplete="off"></label>
+          <label class="calc-row"><span>원</span><input id="calc-krw" type="text" inputmode="numeric" autocomplete="off"></label>
+          <label class="calc-row"><span>$</span><input id="calc-usd" type="text" inputmode="decimal" autocomplete="off"></label>
+        </div>
+
+        <div class="info-card glass-panel tool-card">
+          <h2 class="info-title">🔔 가격 알림 <span class="info-unit">BTC 원화</span></h2>
+          <form id="alert-form" class="alert-form">
+            <input id="alert-price" type="text" inputmode="numeric" autocomplete="off" placeholder="목표 가격" aria-label="목표 가격(원)">
+            <button type="submit" class="alert-add-btn">추가</button>
+          </form>
+          <ul id="alert-list" class="alert-list"></ul>
+        </div>
       </aside>
     </div>
   </div>
+
+  <div id="toast-root" class="toast-root" aria-live="polite"></div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -5,23 +5,38 @@
 import { prices, subscribePrices, updatePrices } from './priceStore.ts';
 import type { Prices } from './priceStore.ts';
 import { kimchiPremium, formatKrw, formatSignedPct, fearGreedLabelKo } from './market.ts';
+import { COINS } from './coins.ts';
 
-const UPBIT_REST = 'https://api.upbit.com/v1/ticker?markets=KRW-BTC,KRW-USDT';
+// BTC/USDT는 상단 바, 나머지는 코인 시세 표와 차트가 함께 쓴다 (업비트 연결 하나로 공유)
+const UPBIT_CODES = Array.from(new Set(['KRW-BTC', 'KRW-USDT', ...COINS.map((c) => `KRW-${c.symbol}`)]));
+const UPBIT_REST = `https://api.upbit.com/v1/ticker?markets=${UPBIT_CODES.join(',')}`;
 const UPBIT_WS = 'wss://api.upbit.com/websocket/v1';
 const FEAR_GREED_API = 'https://api.alternative.me/fng/';
 const FEAR_GREED_REFRESH_MS = 60 * 60 * 1000;
 
-interface UpbitTicker {
+export interface UpbitTicker {
   market?: string; // REST
   code?: string;   // WebSocket
   trade_price: number;
   signed_change_rate: number;
   high_price: number;
   low_price: number;
+  acc_trade_price_24h: number;
+  trade_timestamp: number; // ms
+}
+
+type TickerListener = (market: string, t: UpbitTicker) => void;
+const tickerListeners: TickerListener[] = [];
+
+/** 업비트 원화 마켓 시세 수신 (UPBIT_CODES 전체) */
+export function onUpbitTicker(fn: TickerListener) {
+  tickerListeners.push(fn);
 }
 
 function applyUpbitTicker(t: UpbitTicker) {
   const market = t.market || t.code;
+  if (!market) return;
+  for (const fn of tickerListeners) fn(market, t);
   if (market === 'KRW-BTC') {
     updatePrices({
       krwBtc: t.trade_price,
@@ -51,7 +66,7 @@ function connectUpbitWebSocket() {
   const decoder = new TextDecoder();
 
   ws.onopen = () => {
-    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: ['KRW-BTC', 'KRW-USDT'] }]));
+    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: UPBIT_CODES }]));
   };
   ws.onmessage = (event) => {
     try {
