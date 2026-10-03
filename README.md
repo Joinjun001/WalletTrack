@@ -58,6 +58,10 @@
   - 가격 하락 시 🔴 빨간색 글로우 펄스 이펙트 (`price-down`)
 - **실시간 스트리밍 배지**: 상단 헤더에 `🔴 LIVE` 상태 배지를 통해 WebSocket 연결 여부를 직관적으로 보여줍니다.
 
+### 9. 기록 서버 (`server/`)
+- 수집기가 고래 거래, 강제청산, 선물 지표, 김프를 24시간 모아 PostgreSQL에 저장하고, 읽기 전용 API로 지난 기록을 제공합니다.
+- Docker Compose (PostgreSQL + 수집기 + API + Caddy HTTPS)로 실행합니다. 배포 방법은 [server/README.md](server/README.md)를 참고하세요.
+
 ---
 
 ## 🛠 기술 스택 (Tech Stack)
@@ -121,6 +125,7 @@ WalletTrack/
 │   ├── market.ts             # 김프/반감기/포맷/캔들/알림 판정 순수 로직
 │   ├── txAnalysis.ts         # 금액/입출금 판정 순수 로직 & 거래소 지갑 목록
 │   └── style.css             # Glassmorphism 디자인 시스템 & 반응형 레이아웃
+├── server/                   # 수집기 & 기록 API (Docker Compose, server/README.md)
 ├── tests/
 │   ├── market.test.ts        # 시세/네트워크 계산 테스트
 │   └── txAnalysis.test.ts    # 분석 로직 테스트

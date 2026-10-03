@@ -1,0 +1,22 @@
+{
+  "name": "wallettrack-server",
+  "private": true,
+  "type": "module",
+  "description": "WalletTrack 데이터 수집기 & 기록 API",
+  "scripts": {
+    "collector": "node --experimental-strip-types --no-warnings src/collector.ts",
+    "api": "node --experimental-strip-types --no-warnings src/api.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "dependencies": {
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "typescript": "^5.9.3"
+  }
+}

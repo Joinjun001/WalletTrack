@@ -1,0 +1,106 @@
+# WalletTrack 서버 (수집기 + 기록 API)
+
+웹은 실시간 데이터를 거래소에서 직접 받고, 이 서버는 그 데이터를 **계속 모아 DB에 쌓아 두었다가** 웹이 처음 열릴 때 지난 기록을 내려준다.
+
+```
+mempool.space / 바이낸스 / 업비트
+        │
+   collector ──► PostgreSQL ◄── api ◄── caddy(HTTPS) ◄── 웹 (Vercel)
+```
+
+| 서비스 | 하는 일 |
+|---|---|
+| `collector` | 고래 거래(≥0.1 BTC), 바이낸스 선물 강제청산, 선물 지표(5분), 코인별 김프(1분) 저장, 180일 지난 기록 삭제 |
+| `api` | 기록 조회 REST API (읽기 전용) |
+| `db` | PostgreSQL 17 (외부 포트 없음) |
+| `caddy` | HTTPS 인증서 자동 발급·갱신, `api`로 전달 |
+
+거래 분석·김프 계산은 웹과 같은 코드(`../src/txAnalysis.ts`, `../src/market.ts`)를 쓴다.
+
+## API
+
+| 경로 | 설명 |
+|---|---|
+| `GET /api/health` | 테이블별 마지막 저장 시각 (수집이 멈췄는지 확인용) |
+| `GET /api/whales?hours=24&minBtc=0.1&limit=300` | 고래 거래, 최신순 |
+| `GET /api/liquidations?hours=24&minUsd=1000&limit=40` | 강제청산, 최신순 |
+| `GET /api/liquidations/summary?hours=24` | 롱/숏 청산 합계 |
+| `GET /api/futures?symbol=BTCUSDT&hours=24` | 펀딩비·미결제약정·롱 비율 추이 |
+| `GET /api/kimchi?symbol=BTC&hours=24` | 김프 추이 |
+
+시각은 모두 밀리초 타임스탬프. 기간이 길면(1일 초과) 평균을 내서 점 개수를 줄인다.
+
+## 배포 (OCI A1, Ubuntu 기준)
+
+### 0. 준비
+
+- 도메인: [DuckDNS](https://www.duckdns.org)에서 서브도메인을 만들고 **current ip**에 인스턴스 공인 IP를 넣는다.
+- OCI 콘솔 → VCN → Security List에서 TCP 80, 443 인바운드 허용.
+
+### 1. 이 서버에서 거래소 API가 열리는지 확인
+
+```bash
+curl -s -o /dev/null -w "binance spot %{http_code}\n" https://api.binance.com/api/v3/ping
+curl -s -o /dev/null -w "binance futures %{http_code}\n" https://fapi.binance.com/fapi/v1/ping
+curl -s -o /dev/null -w "upbit %{http_code}\n" "https://api.upbit.com/v1/ticker?markets=KRW-BTC"
+```
+
+모두 200이어야 한다. 바이낸스가 451이면 그 리전에서는 선물·김프 수집이 안 된다.
+
+### 2. Docker 설치
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo usermod -aG docker $USER   # 다시 로그인하면 sudo 없이 docker 사용
+```
+
+### 3. 서버 방화벽 열기
+
+OCI Ubuntu 이미지는 iptables가 80/443을 막고 있다 (Security List와 별개).
+
+```bash
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+```
+
+### 4. 실행
+
+```bash
+git clone https://github.com/Joinjun001/WalletTrack.git
+cd WalletTrack/server
+cp .env.example .env
+sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
+nano .env    # API_DOMAIN을 DuckDNS 주소로
+docker compose up -d --build
+```
+
+### 5. 확인
+
+```bash
+docker compose ps
+docker compose logs -f collector     # "연결됨", 10분마다 "최근 10분 저장: ..."
+curl https://<API_DOMAIN>/api/health
+```
+
+## 운영
+
+```bash
+# 코드 업데이트 반영
+git pull && docker compose up -d --build
+
+# DB 접속
+docker compose exec db psql -U wallettrack
+
+# 백업: mkdir -p ~/backup 후 crontab -e 에 아래 줄 추가 (매일 3시, 7일치 보관)
+0 3 * * * cd ~/WalletTrack/server && docker compose exec -T db pg_dump -U wallettrack wallettrack | gzip > ~/backup/wallettrack-$(date +\%F).sql.gz && find ~/backup -name 'wallettrack-*.sql.gz' -mtime +7 -delete
+```
+
+## 로컬에서 DB 없이 시험
+
+`DATABASE_URL`이 없으면 저장하지 않고 쿼리를 로그로만 출력한다 (Node 22.6 이상).
+
+```bash
+cd server && npm install
+npm run collector
+```

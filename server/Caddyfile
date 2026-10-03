@@ -1,0 +1,5 @@
+# HTTPS 인증서는 Caddy가 Let's Encrypt에서 자동으로 받고 갱신한다
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy api:8080
+}

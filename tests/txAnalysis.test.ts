@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { analyzeTransaction, escapeHtml } from '../src/txAnalysis.ts';
+import { analyzeTransaction, escapeHtml, fromMempoolTx } from '../src/txAnalysis.ts';
 import type { ExchangeWallet } from '../src/txAnalysis.ts';
 
 const EX = 'exchangeAddr';
@@ -76,4 +76,21 @@ test('missing fields do not throw', () => {
 
 test('escapeHtml escapes markup', () => {
   assert.equal(escapeHtml(`<img src=x onerror="a('b')">&`), '&lt;img src=x onerror=&quot;a(&#39;b&#39;)&quot;&gt;&amp;');
+});
+
+test('mempool.space tx is converted and analyzed like a blockchain.info tx', () => {
+  const raw = fromMempoolTx({
+    txid: 'abc',
+    vin: [{ prevout: { scriptpubkey_address: 'sender', value: 3 * BTC } }, { prevout: null }],
+    vout: [
+      { scriptpubkey_address: EX, value: 2 * BTC },
+      { scriptpubkey_address: 'sender', value: 0.9 * BTC },
+      { value: 0 } // OP_RETURN
+    ]
+  });
+  assert.equal(raw.hash, 'abc');
+  assert.equal(raw.inputs?.[1].prev_out, undefined);
+  const result = analyzeTransaction(raw, exchanges);
+  assert.equal(result.direction, 'deposit');
+  assert.equal(result.btcAmount, 2);
 });

@@ -28,6 +28,24 @@ export interface RawTx {
   out?: RawOutput[];
 }
 
+// mempool.space WebSocket `mempool-transactions.added` 항목 (사용하는 필드만)
+export interface MempoolTx {
+  txid: string;
+  vin?: { prevout?: { scriptpubkey_address?: string; value?: number } | null }[];
+  vout?: { scriptpubkey_address?: string; value?: number }[];
+}
+
+/** mempool.space 거래를 blockchain.info 형식으로 바꿔 analyzeTransaction을 그대로 쓴다 */
+export function fromMempoolTx(tx: MempoolTx): RawTx {
+  return {
+    hash: tx.txid,
+    inputs: (tx.vin || []).map(v => ({
+      prev_out: v.prevout ? { addr: v.prevout.scriptpubkey_address, value: v.prevout.value } : undefined
+    })),
+    out: (tx.vout || []).map(o => ({ addr: o.scriptpubkey_address, value: o.value }))
+  };
+}
+
 export interface TxAnalysis {
   hash: string;
   btcAmount: number;
