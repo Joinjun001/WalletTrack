@@ -34,6 +34,14 @@ const MAX_HISTORY_ITEMS = 300;
 const MIN_STORED_BTC = 0.1; // 가장 낮은 필터값. 필터를 바꿔도 다시 보여줄 수 있게 이 이상은 모두 저장
 const WHALE_BTC = 3.0;
 
+type LiveTxListener = (tx: LiveBtcTransaction) => void;
+const liveTxListeners: LiveTxListener[] = [];
+
+/** 실시간으로 새로 감지된 거래 (서버 기록은 포함하지 않는다). 고래 알림이 쓴다 */
+export function onLiveTx(fn: LiveTxListener) {
+  liveTxListeners.push(fn);
+}
+
 /**
  * Fetch current Bitcoin price in USD (REST fallback / initial)
  */
@@ -253,6 +261,7 @@ function processTransaction(txData: RawTx, container: HTMLElement | null, countE
   if (txHistory.some(t => t.hash === hash)) return; // 서버 기록으로 이미 받은 거래
 
   const item = toLiveTx(hash, btcAmount, direction, exchange, Date.now());
+  for (const fn of liveTxListeners) fn(item);
 
   txHistory.unshift(item);
   if (txHistory.length > MAX_HISTORY_ITEMS) {

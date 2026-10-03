@@ -140,5 +140,30 @@ export function alertDirection(target: number, currentPrice: number): 'above' | 
 
 export function isAlertTriggered(alert: PriceAlert, price: number): boolean {
   if (!(price > 0)) return false;
-  return alert.direction === 'above' ? price >= alert.target : price <= alert.target;
+  return isThresholdCrossed(alert, price);
+}
+
+/** 값이 음수일 수 있는 알림(김프 등)용. 값을 아직 모르면 null */
+export function isThresholdCrossed(alert: PriceAlert, value: number | null): boolean {
+  if (value === null || !Number.isFinite(value)) return false;
+  return alert.direction === 'above' ? value >= alert.target : value <= alert.target;
+}
+
+/** 등락률 상위/하위 n개. 같은 목록을 정렬하지 않고 복사해서 쓴다 */
+export function topMovers<T extends { changePct: number }>(list: T[], n: number): { gainers: T[]; losers: T[] } {
+  const sorted = [...list].sort((a, b) => b.changePct - a.changePct);
+  return {
+    gainers: sorted.slice(0, n).filter((t) => t.changePct > 0),
+    losers: sorted.reverse().slice(0, n).filter((t) => t.changePct < 0)
+  };
+}
+
+/** 남은 밀리초 -> "13일 9시간" / "5시간 20분" / "12분" */
+export function formatDurationKo(ms: number): string {
+  const minutes = Math.max(0, Math.floor(ms / 60_000));
+  const days = Math.floor(minutes / 1440);
+  const hours = Math.floor((minutes % 1440) / 60);
+  if (days > 0) return `${days}일 ${hours}시간`;
+  if (hours > 0) return `${hours}시간 ${minutes % 60}분`;
+  return `${minutes}분`;
 }

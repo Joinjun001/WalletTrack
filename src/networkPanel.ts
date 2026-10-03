@@ -1,8 +1,8 @@
 /**
- * Bitcoin network panel: recommended fees, latest block, halving countdown (mempool.space)
+ * Bitcoin network panel: recommended fees, latest block, halving countdown, difficulty adjustment, mempool backlog (mempool.space)
  */
 
-import { halvingInfo, timeAgoKo } from './market.ts';
+import { formatDurationKo, formatSignedPct, halvingInfo, timeAgoKo } from './market.ts';
 
 const MEMPOOL_API = 'https://mempool.space/api';
 const REFRESH_MS = 30 * 1000;
@@ -20,6 +20,20 @@ interface Block {
   extras?: { pool?: { name?: string } };
 }
 
+interface DifficultyAdjustment {
+  progressPercent: number;
+  difficultyChange: number; // 예상 변동률 (%)
+  remainingBlocks: number;
+  remainingTime: number;    // ms
+}
+
+interface MempoolInfo {
+  count: number;
+  vsize: number; // vB
+}
+
+const BLOCK_VSIZE = 1_000_000; // 블록 하나에 담기는 최대 vB
+
 async function getJson<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${MEMPOOL_API}${path}`);
@@ -36,10 +50,30 @@ function setText(id: string, text: string) {
 }
 
 async function refresh() {
-  const [fees, blocks] = await Promise.all([
+  const [fees, blocks, difficulty, mempool] = await Promise.all([
     getJson<Fees>('/v1/fees/recommended'),
-    getJson<Block[]>('/v1/blocks')
+    getJson<Block[]>('/v1/blocks'),
+    getJson<DifficultyAdjustment>('/v1/difficulty-adjustment'),
+    getJson<MempoolInfo>('/mempool')
   ]);
+
+  if (difficulty) {
+    const elem = document.getElementById('difficulty-change');
+    if (elem) {
+      elem.textContent = formatSignedPct(difficulty.difficultyChange);
+      elem.classList.toggle('up', difficulty.difficultyChange > 0);
+      elem.classList.toggle('down', difficulty.difficultyChange < 0);
+    }
+    setText('difficulty-sub', `${difficulty.remainingBlocks.toLocaleString('ko-KR')} 블록 · 약 ${formatDurationKo(difficulty.remainingTime)} 후`);
+    setText('difficulty-progress', `${difficulty.progressPercent.toFixed(1)}%`);
+    const bar = document.getElementById('difficulty-bar');
+    if (bar) bar.style.width = `${Math.min(100, difficulty.progressPercent)}%`;
+  }
+
+  if (mempool) {
+    setText('mempool-count', `${mempool.count.toLocaleString('ko-KR')}건`);
+    setText('mempool-blocks', `약 ${Math.ceil(mempool.vsize / BLOCK_VSIZE).toLocaleString('ko-KR')}블록 분량 · ${(mempool.vsize / 1e6).toFixed(1)} vMB`);
+  }
 
   if (fees) {
     setText('fee-fast', String(fees.fastestFee));

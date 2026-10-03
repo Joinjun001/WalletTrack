@@ -1,9 +1,10 @@
 /**
- * 바이낸스 BTCUSDT 무기한 선물 지표(펀딩비, 미결제약정, 롱/숏 비율)와 전체 마켓 실시간 강제청산 피드
+ * 바이낸스 BTCUSDT 무기한 선물 지표(펀딩비, 미결제약정, 롱/숏 비율), 주요 코인 펀딩비 표, 전체 마켓 실시간 강제청산 피드
  */
 
 import { escapeHtml } from './txAnalysis.ts';
-import { formatCountdown, formatFundingRate, formatUsdShort, liquidatedPosition } from './market.ts';
+import { COINS } from './coins.ts';
+import { formatCountdown, formatFundingRate, formatSignedPct, formatUsdShort, liquidatedPosition } from './market.ts';
 import { getHistory } from './historyApi.ts';
 import type { LiquidationRecord, LiquidationSummary } from './historyApi.ts';
 
@@ -38,15 +39,45 @@ function setText(id: string, text: string, tone?: number) {
   }
 }
 
+interface PremiumIndex {
+  symbol: string;
+  markPrice: string;
+  lastFundingRate: string;
+  nextFundingTime: number;
+}
+
+/** 주요 코인 펀딩비 표. 바이낸스 선물에 없는 코인은 '-' */
+function renderFundingTable(list: PremiumIndex[]) {
+  const tbody = document.getElementById('funding-table-body');
+  if (!tbody) return;
+  const bySymbol = new Map(list.map((p) => [p.symbol, p]));
+  tbody.innerHTML = COINS.map((c) => {
+    const p = bySymbol.get(`${c.symbol}USDT`);
+    const rate = p ? parseFloat(p.lastFundingRate) : NaN;
+    const mark = p ? parseFloat(p.markPrice) : NaN;
+    const tone = rate > 0 ? 'up' : rate < 0 ? 'down' : '';
+    return `
+      <tr>
+        <td class="coin-name-cell"><strong>${c.name}</strong><span>${c.symbol}</span></td>
+        <td class="num ${tone}">${isNaN(rate) ? '-' : formatFundingRate(rate)}</td>
+        <td class="num hide-mobile">${isNaN(rate) ? '-' : formatSignedPct(rate * 100 * 3 * 365)}</td>
+        <td class="num">${isNaN(mark) ? '-' : `$${mark.toLocaleString('en-US', { maximumSignificantDigits: 6 })}`}</td>
+      </tr>`;
+  }).join('');
+}
+
 async function refresh() {
-  const [premium, oi, ratio] = await Promise.all([
-    getJson<{ markPrice: string; lastFundingRate: string; nextFundingTime: number }>('/fapi/v1/premiumIndex?symbol=BTCUSDT'),
+  const [premiums, oi, ratio] = await Promise.all([
+    getJson<PremiumIndex[]>('/fapi/v1/premiumIndex'),
     getJson<{ openInterest: string }>('/fapi/v1/openInterest?symbol=BTCUSDT'),
     getJson<{ longAccount: string; shortAccount: string }[]>('/futures/data/globalLongShortAccountRatio?symbol=BTCUSDT&period=5m&limit=1')
   ]);
 
   const status = document.getElementById('futures-status');
-  if (status) status.hidden = !!(premium || oi || ratio);
+  if (status) status.hidden = !!(premiums || oi || ratio);
+
+  if (premiums) renderFundingTable(premiums);
+  const premium = premiums?.find((p) => p.symbol === 'BTCUSDT');
 
   const mark = premium ? parseFloat(premium.markPrice) : 0;
   if (premium) {

@@ -5,6 +5,8 @@
  * GET /api/whales?hours=24&minBtc=0.1&limit=300
  * GET /api/liquidations?hours=24&minUsd=1000&limit=40
  * GET /api/liquidations/summary?hours=24
+ * GET /api/liquidations/by-symbol?hours=24&limit=10
+ * GET /api/whales/flow?hours=24
  * GET /api/futures?symbol=BTCUSDT&hours=24
  * GET /api/kimchi?symbol=BTC&hours=24
  */
@@ -98,6 +100,37 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
       shortUsd: by('short')?.usd ?? 0,
       longCount: by('long')?.count ?? 0,
       shortCount: by('short')?.count ?? 0
+    };
+  },
+
+  '/api/liquidations/by-symbol': async (q) => {
+    const rows = await query<{ symbol: string; long_usd: number; short_usd: number }>(
+      `SELECT symbol,
+              coalesce(sum(usd_value) FILTER (WHERE position = 'long'), 0) AS long_usd,
+              coalesce(sum(usd_value) FILTER (WHERE position = 'short'), 0) AS short_usd
+       FROM liquidations WHERE occurred_at > now() - $1::float8 * interval '1 hour'
+       GROUP BY symbol ORDER BY sum(usd_value) DESC LIMIT $2`,
+      [numParam(q, 'hours', 24, 0.1, 24 * 30), Math.round(numParam(q, 'limit', 10, 1, 50))]
+    );
+    return rows.map((r) => ({ symbol: r.symbol, longUsd: r.long_usd, shortUsd: r.short_usd }));
+  },
+
+  '/api/whales/flow': async (q) => {
+    const hours = numParam(q, 'hours', 24, 0.1, 24 * 30);
+    const rows = await query<{ direction: string; btc: number; count: number }>(
+      `SELECT direction, sum(btc_amount) AS btc, count(*) AS count FROM whale_txs
+       WHERE detected_at > now() - $1::float8 * interval '1 hour' GROUP BY direction`,
+      [hours]
+    );
+    const by = (d: string) => rows.find((r) => r.direction === d);
+    return {
+      hours,
+      depositBtc: by('deposit')?.btc ?? 0,
+      withdrawalBtc: by('withdrawal')?.btc ?? 0,
+      transferBtc: by('transfer')?.btc ?? 0,
+      depositCount: by('deposit')?.count ?? 0,
+      withdrawalCount: by('withdrawal')?.count ?? 0,
+      transferCount: by('transfer')?.count ?? 0
     };
   },
 

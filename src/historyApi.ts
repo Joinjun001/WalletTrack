@@ -27,6 +27,33 @@ export interface LiquidationSummary {
   shortUsd: number;
 }
 
+export interface LiquidationBySymbol {
+  symbol: string;
+  longUsd: number;
+  shortUsd: number;
+}
+
+export interface WhaleFlow {
+  hours: number;
+  depositBtc: number;
+  withdrawalBtc: number;
+  depositCount: number;
+  withdrawalCount: number;
+}
+
+export interface KimchiPoint {
+  t: number; // ms
+  premiumPct: number;
+}
+
+export interface FuturesPoint {
+  t: number; // ms
+  fundingRate: number | null;
+  openInterest: number | null; // 코인 수량
+  markPrice: number | null;
+  longRatio: number | null;    // 0~1
+}
+
 export async function getHistory<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${HISTORY_API}${path}`, { signal: AbortSignal.timeout(TIMEOUT_MS) });

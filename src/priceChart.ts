@@ -3,7 +3,7 @@
  */
 
 import { createChart, CandlestickSeries, HistogramSeries, ColorType } from 'lightweight-charts';
-import type { IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
+import type { DeepPartial, IChartApi, ISeriesApi, TimeChartOptions, UTCTimestamp } from 'lightweight-charts';
 import { onUpbitTicker } from './krMarket.ts';
 import { coinName } from './coins.ts';
 import { applyTick, candleTimeOf, krwPricePrecision, KST_OFFSET_SEC } from './market.ts';
@@ -106,6 +106,25 @@ function applyLivePrice(price: number, tradeMs: number) {
   candleSeries.update({ ...next, time: next.time as UTCTimestamp });
 }
 
+/** 사이트 차트 공통 모양 (기록 추이 차트도 같이 쓴다) */
+export function baseChartOptions(): DeepPartial<TimeChartOptions> {
+  return {
+    autoSize: true,
+    layout: {
+      background: { type: ColorType.Solid, color: 'transparent' },
+      textColor: '#7A899C',
+      fontFamily: "'JetBrains Mono', monospace",
+      fontSize: 11
+    },
+    grid: {
+      vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
+      horzLines: { color: 'rgba(255, 255, 255, 0.04)' }
+    },
+    rightPriceScale: { borderColor: 'rgba(255, 255, 255, 0.08)' },
+    timeScale: { borderColor: 'rgba(255, 255, 255, 0.08)', timeVisible: true, secondsVisible: false }
+  };
+}
+
 function renderTitle() {
   const title = document.getElementById('chart-title');
   if (title) title.textContent = `${coinName(symbol)} ${symbol}/KRW`;
@@ -125,19 +144,7 @@ export function initPriceChart() {
   if (!container) return;
 
   chart = createChart(container, {
-    autoSize: true,
-    layout: {
-      background: { type: ColorType.Solid, color: 'transparent' },
-      textColor: '#7A899C',
-      fontFamily: "'JetBrains Mono', monospace",
-      fontSize: 11
-    },
-    grid: {
-      vertLines: { color: 'rgba(255, 255, 255, 0.04)' },
-      horzLines: { color: 'rgba(255, 255, 255, 0.04)' }
-    },
-    rightPriceScale: { borderColor: 'rgba(255, 255, 255, 0.08)' },
-    timeScale: { borderColor: 'rgba(255, 255, 255, 0.08)', timeVisible: true, secondsVisible: false },
+    ...baseChartOptions(),
     localization: {
       locale: 'ko-KR',
       priceFormatter: (p: number) => p.toLocaleString('ko-KR', { minimumFractionDigits: pricePrecision, maximumFractionDigits: pricePrecision })
@@ -154,12 +161,12 @@ export function initPriceChart() {
   volumeSeries = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' });
   volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
 
-  document.querySelectorAll<HTMLButtonElement>('.interval-btn').forEach((btn) => {
+  document.querySelectorAll<HTMLButtonElement>('.interval-btn[data-interval]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const next = btn.dataset.interval;
       if (!next || !INTERVALS[next] || next === interval) return;
       interval = next;
-      document.querySelectorAll('.interval-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.interval-btn[data-interval]').forEach((b) => b.classList.toggle('active', b === btn));
       lastCandle = null;
       loadCandles();
     });

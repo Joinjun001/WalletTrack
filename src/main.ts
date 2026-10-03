@@ -5,6 +5,9 @@ import { initPriceChart } from './priceChart.ts';
 import { initCoinTable } from './coinTable.ts';
 import { initFuturesPanel } from './futuresPanel.ts';
 import { initTools } from './tools.ts';
+import { initHistoryCharts } from './historyCharts.ts';
+import { initHistoryStats } from './historyStats.ts';
+import { initTopMovers } from './topMovers.ts';
 
 function initTabs() {
   const buttons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
@@ -31,4 +34,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initFuturesPanel();
   initTools();
   initLiveStreamDashboard();
+  initTopMovers();
+  initHistoryStats();
+  initHistoryCharts();
 });

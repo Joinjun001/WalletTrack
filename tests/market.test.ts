@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   kimchiPremium, formatKrw, formatKrwShort, formatSignedPct, halvingInfo, fearGreedLabelKo, timeAgoKo,
   formatKrwPrice, formatUsdShort, formatFundingRate, formatCountdown, liquidatedPosition,
-  candleTimeOf, applyTick, KST_OFFSET_SEC, alertDirection, isAlertTriggered
+  candleTimeOf, applyTick, KST_OFFSET_SEC, alertDirection, isAlertTriggered, isThresholdCrossed,
+  topMovers, formatDurationKo
 } from '../src/market.ts';
 
 test('kimchiPremium compares KRW price with USD price x USDT rate', () => {
@@ -86,4 +87,30 @@ test('price alerts fire when the price crosses the target in the registered dire
   assert.equal(isAlertTriggered(below, 110_500_000), false);
   assert.equal(isAlertTriggered(below, 109_000_000), true);
   assert.equal(isAlertTriggered(below, 0), false); // 시세 수신 전
+});
+
+test('threshold alerts work with negative values such as kimchi premium', () => {
+  const below = { id: 'k', target: -0.5, direction: 'below' as const };
+  const above = { id: 'k2', target: 3, direction: 'above' as const };
+  assert.equal(isThresholdCrossed(below, -0.4), false);
+  assert.equal(isThresholdCrossed(below, -0.5), true);
+  assert.equal(isThresholdCrossed(above, 3.2), true);
+  assert.equal(isThresholdCrossed(above, null), false); // 시세 수신 전
+});
+
+test('topMovers picks gainers and losers without mutating the input', () => {
+  const list = [{ s: 'A', changePct: 5 }, { s: 'B', changePct: -3 }, { s: 'C', changePct: 12 }, { s: 'D', changePct: -8 }, { s: 'E', changePct: 0 }];
+  const { gainers, losers } = topMovers(list, 2);
+  assert.deepEqual(gainers.map((t) => t.s), ['C', 'A']);
+  assert.deepEqual(losers.map((t) => t.s), ['D', 'B']);
+  assert.equal(list[0].s, 'A');
+  // 오른 코인이 n개보다 적으면 0%나 하락 코인을 상승 목록에 넣지 않는다
+  assert.deepEqual(topMovers(list, 4).gainers.map((t) => t.s), ['C', 'A']);
+});
+
+test('formatDurationKo', () => {
+  assert.equal(formatDurationKo((13 * 24 + 9) * 3600_000 + 59_000), '13일 9시간');
+  assert.equal(formatDurationKo(5 * 3600_000 + 20 * 60_000), '5시간 20분');
+  assert.equal(formatDurationKo(12 * 60_000), '12분');
+  assert.equal(formatDurationKo(-1), '0분');
 });

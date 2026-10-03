@@ -1,13 +1,17 @@
 /**
- * 사이드 도구: BTC ↔ 사토시 ↔ 원화 ↔ 달러 환산 계산기, BTC 원화 가격 알림 (브라우저 알림 + 화면 토스트)
+ * 사이드 도구: BTC ↔ 사토시 ↔ 원화 ↔ 달러 환산 계산기, BTC 원화 가격 알림, 김프 알림, 고래 거래 알림 (브라우저 알림 + 화면 토스트)
  */
 
 import { prices, subscribePrices } from './priceStore.ts';
-import { alertDirection, formatKrw, isAlertTriggered } from './market.ts';
+import { alertDirection, formatKrw, formatSignedPct, isThresholdCrossed, kimchiPremium } from './market.ts';
 import type { PriceAlert } from './market.ts';
+import { onLiveTx } from './btcWhaleTracker.ts';
 
 const SATS_PER_BTC = 100_000_000;
 const ALERTS_KEY = 'wallettrack.priceAlerts';
+const KIMCHI_ALERTS_KEY = 'wallettrack.kimchiAlerts';
+const WHALE_ALERT_KEY = 'wallettrack.whaleAlertBtc';
+const WHALE_ALERT_GAP_MS = 10 * 1000; // 고래 알림은 10초에 한 번까지 (작은 기준값이면 너무 자주 온다)
 
 // ---------- 환산 계산기 ----------
 
@@ -63,79 +67,167 @@ function initCalculator() {
   subscribePrices(recalc);
 }
 
-// ---------- 가격 알림 ----------
+// ---------- 가격·김프 알림 ----------
 
-let alerts: PriceAlert[] = loadAlerts();
+interface AlertCardConfig {
+  storageKey: string;
+  formId: string;
+  inputId: string;
+  listId: string;
+  title: string;                        // 브라우저 알림 제목
+  current: () => number | null;         // 아직 모르면 null
+  parse: (text: string) => number | null;
+  format: (value: number) => string;
+  describe: (alert: PriceAlert, value: number) => string;
+}
 
-function loadAlerts(): PriceAlert[] {
+function loadJson<T>(key: string, fallback: T): T {
   try {
-    const parsed = JSON.parse(localStorage.getItem(ALERTS_KEY) || '[]');
-    return Array.isArray(parsed) ? parsed : [];
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : (JSON.parse(raw) as T);
   } catch {
-    return [];
+    return fallback;
   }
 }
 
-function saveAlerts() {
+function saveJson(key: string, value: unknown) {
   try {
-    localStorage.setItem(ALERTS_KEY, JSON.stringify(alerts));
+    localStorage.setItem(key, JSON.stringify(value));
   } catch {
     // 시크릿 모드 등: 이번 방문 동안만 유지
   }
 }
 
-function renderAlerts() {
-  const list = document.getElementById('alert-list');
-  if (!list) return;
-  list.innerHTML = '';
-  if (alerts.length === 0) {
-    list.innerHTML = '<li class="alert-empty">등록된 알림이 없어요</li>';
-    return;
-  }
-  for (const alert of alerts) {
-    const li = document.createElement('li');
-    li.className = 'alert-item';
-    li.innerHTML = `
-      <span class="${alert.direction === 'above' ? 'up' : 'down'}">${alert.direction === 'above' ? '▲ 이상' : '▼ 이하'}</span>
-      <strong>${formatKrw(alert.target)}</strong>
-      <button class="alert-remove" aria-label="알림 삭제">×</button>`;
-    li.querySelector('button')?.addEventListener('click', () => {
-      alerts = alerts.filter((a) => a.id !== alert.id);
-      saveAlerts();
-      renderAlerts();
-    });
-    list.appendChild(li);
-  }
+function notify(title: string, message: string) {
+  showToast(`🔔 ${message}`);
+  if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body: message });
 }
 
-function addAlert(form: HTMLFormElement, input: HTMLInputElement) {
-  const target = parseNumber(input.value);
-  if (!(target > 0)) return;
-  if (!(prices.krwBtc > 0)) {
-    showToast('시세를 받아오는 중이에요. 잠시 후 다시 시도해 주세요.');
-    return;
-  }
-  alerts.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, target, direction: alertDirection(target, prices.krwBtc) });
-  saveAlerts();
-  renderAlerts();
-  form.reset();
-
-  // 알림 권한은 사용자가 버튼을 누른 이 시점에만 요청할 수 있다
+// 알림 권한은 사용자가 버튼을 누르는 등 직접 조작한 시점에만 요청할 수 있다
+function requestNotificationPermission() {
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission();
 }
 
-function checkAlerts() {
-  const price = prices.krwBtc;
-  const fired = alerts.filter((a) => isAlertTriggered(a, price));
-  if (fired.length === 0) return;
-  alerts = alerts.filter((a) => !fired.includes(a));
-  saveAlerts();
-  renderAlerts();
-  for (const alert of fired) {
-    const message = `BTC가 ${formatKrw(alert.target)} ${alert.direction === 'above' ? '이상으로 올랐어요' : '이하로 내렸어요'} (현재 ${formatKrw(price)})`;
-    showToast(`🔔 ${message}`);
-    if ('Notification' in window && Notification.permission === 'granted') new Notification('가격 알림', { body: message });
-  }
+/** 목표값을 등록해 두고, 값이 등록 시점 기준 방향으로 목표를 넘으면 한 번 알리고 지운다 */
+function initAlertCard(cfg: AlertCardConfig) {
+  const stored = loadJson<unknown>(cfg.storageKey, []);
+  let alerts: PriceAlert[] = Array.isArray(stored) ? stored : [];
+  const form = document.getElementById(cfg.formId) as HTMLFormElement | null;
+  const input = document.getElementById(cfg.inputId) as HTMLInputElement | null;
+
+  const render = () => {
+    const list = document.getElementById(cfg.listId);
+    if (!list) return;
+    list.innerHTML = '';
+    if (alerts.length === 0) {
+      list.innerHTML = '<li class="alert-empty">등록된 알림이 없어요</li>';
+      return;
+    }
+    for (const alert of alerts) {
+      const li = document.createElement('li');
+      li.className = 'alert-item';
+      li.innerHTML = `
+        <span class="${alert.direction === 'above' ? 'up' : 'down'}">${alert.direction === 'above' ? '▲ 이상' : '▼ 이하'}</span>
+        <strong>${cfg.format(alert.target)}</strong>
+        <button class="alert-remove" aria-label="알림 삭제">×</button>`;
+      li.querySelector('button')?.addEventListener('click', () => {
+        alerts = alerts.filter((a) => a.id !== alert.id);
+        saveJson(cfg.storageKey, alerts);
+        render();
+      });
+      list.appendChild(li);
+    }
+  };
+
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!input) return;
+    const target = cfg.parse(input.value);
+    if (target === null) return;
+    const current = cfg.current();
+    if (current === null) {
+      showToast('시세를 받아오는 중이에요. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    alerts.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, target, direction: alertDirection(target, current) });
+    saveJson(cfg.storageKey, alerts);
+    render();
+    form.reset();
+    requestNotificationPermission();
+  });
+
+  subscribePrices(() => {
+    const value = cfg.current();
+    if (value === null) return;
+    // 입력 칸 안내 문구로 현재 값을 보여준다
+    if (input) input.placeholder = `현재 ${cfg.format(value)}`;
+    const fired = alerts.filter((a) => isThresholdCrossed(a, value));
+    if (fired.length === 0) return;
+    alerts = alerts.filter((a) => !fired.includes(a));
+    saveJson(cfg.storageKey, alerts);
+    render();
+    for (const alert of fired) notify(cfg.title, cfg.describe(alert, value));
+  });
+  render();
+}
+
+function initAlerts() {
+  initAlertCard({
+    storageKey: ALERTS_KEY,
+    formId: 'alert-form',
+    inputId: 'alert-price',
+    listId: 'alert-list',
+    title: '가격 알림',
+    current: () => (prices.krwBtc > 0 ? prices.krwBtc : null),
+    parse: (text) => {
+      const v = parseNumber(text);
+      return v > 0 ? v : null;
+    },
+    format: formatKrw,
+    describe: (a, v) => `BTC가 ${formatKrw(a.target)} ${a.direction === 'above' ? '이상으로 올랐어요' : '이하로 내렸어요'} (현재 ${formatKrw(v)})`
+  });
+
+  initAlertCard({
+    storageKey: KIMCHI_ALERTS_KEY,
+    formId: 'kimchi-alert-form',
+    inputId: 'kimchi-alert-input',
+    listId: 'kimchi-alert-list',
+    title: '김프 알림',
+    current: () => kimchiPremium(prices.krwBtc, prices.usdBtc, prices.krwUsdt),
+    parse: (text) => {
+      const v = parseFloat(text.replace(/[%\s]/g, ''));
+      return Number.isFinite(v) && Math.abs(v) < 100 ? v : null;
+    },
+    format: formatSignedPct,
+    describe: (a, v) => `BTC 김프가 ${formatSignedPct(a.target)} ${a.direction === 'above' ? '이상으로 올랐어요' : '이하로 내렸어요'} (현재 ${formatSignedPct(v)})`
+  });
+}
+
+// ---------- 고래 거래 알림 ----------
+
+function initWhaleAlert() {
+  const select = document.getElementById('whale-alert-threshold') as HTMLSelectElement | null;
+  if (!select) return;
+  let threshold = Number(loadJson<unknown>(WHALE_ALERT_KEY, 0)) || 0;
+  if ([...select.options].some((o) => Number(o.value) === threshold)) select.value = String(threshold);
+  else threshold = 0;
+
+  select.addEventListener('change', () => {
+    threshold = Number(select.value) || 0;
+    saveJson(WHALE_ALERT_KEY, threshold);
+    if (threshold > 0) requestNotificationPermission();
+  });
+
+  let lastNotifiedAt = 0;
+  onLiveTx((tx) => {
+    if (!(threshold > 0) || tx.btcAmount < threshold) return;
+    const now = Date.now();
+    if (now - lastNotifiedAt < WHALE_ALERT_GAP_MS) return;
+    lastNotifiedAt = now;
+    const where = tx.direction === 'deposit' ? `${tx.exchangeName} 입금` : tx.direction === 'withdrawal' ? `${tx.exchangeName} 출금` : '전송';
+    const krw = prices.krwBtc > 0 ? ` (약 ${formatKrw(tx.btcAmount * prices.krwBtc)})` : '';
+    notify('고래 거래', `🐋 ${tx.btcAmount.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC ${where}${krw}`);
+  });
 }
 
 function showToast(message: string) {
@@ -148,22 +240,8 @@ function showToast(message: string) {
   setTimeout(() => toast.remove(), 6000);
 }
 
-function initAlerts() {
-  const form = document.getElementById('alert-form') as HTMLFormElement | null;
-  const input = document.getElementById('alert-price') as HTMLInputElement | null;
-  form?.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (input) addAlert(form, input);
-  });
-  // 입력 칸 안내 문구로 현재가를 보여준다
-  subscribePrices((p) => {
-    if (input && p.krwBtc > 0) input.placeholder = `현재 ${Math.round(p.krwBtc).toLocaleString('ko-KR')}`;
-  });
-  renderAlerts();
-  subscribePrices(checkAlerts);
-}
-
 export function initTools() {
   initCalculator();
   initAlerts();
+  initWhaleAlert();
 }
