@@ -27,3 +27,5 @@ Thumbs.db
 
 # 로컬 문서 및 기타 자산
 pdf/
+.vercel
+.env*
