@@ -7,6 +7,8 @@ const UPBIT_API = 'https://api.upbit.com/v1';
 const CANDLE_UNITS = new Set(['minutes/1', 'minutes/15', 'minutes/60', 'days']);
 const CANDLES_TTL_MS = 3_000;
 const TICKERS_TTL_MS = 3_000;
+const PAST_CANDLES_TTL_MS = 10 * 60_000; // to가 있으면 지난 캔들이라 바뀌지 않는다
+const MARKETS_TTL_MS = 60 * 60_000;
 const MAX_CACHE_ENTRIES = 500;
 
 export class UpstreamError extends Error {
@@ -17,27 +19,27 @@ export class UpstreamError extends Error {
   }
 }
 
-const cache = new Map<string, { at: number; value: Promise<unknown> }>();
+const cache = new Map<string, { at: number; ttlMs: number; value: Promise<unknown> }>();
 
 /** 같은 주소는 ttl 동안 한 번만 업비트에 요청한다 (동시에 들어온 요청도 하나로 합친다) */
 function cachedGet(url: string, ttlMs: number): Promise<unknown> {
   const now = Date.now();
   const hit = cache.get(url);
-  if (hit && now - hit.at < ttlMs) return hit.value;
+  if (hit && now - hit.at < hit.ttlMs) return hit.value;
 
   const value = fetch(url, { signal: AbortSignal.timeout(5_000) }).then(async (res) => {
     if (!res.ok) throw new UpstreamError(res.status === 429 ? 503 : 502, `upbit ${res.status}`);
     return res.json();
   });
   value.catch(() => cache.delete(url)); // 실패는 캐시하지 않는다
-  cache.set(url, { at: now, value });
+  cache.set(url, { at: now, ttlMs, value });
   if (cache.size > MAX_CACHE_ENTRIES) {
-    for (const [key, entry] of cache) if (now - entry.at >= ttlMs) cache.delete(key);
+    for (const [key, entry] of cache) if (now - entry.at >= entry.ttlMs) cache.delete(key);
   }
   return value;
 }
 
-/** GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200 */
+/** GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=2026-10-03T12:00:00Z] (to 이전 캔들) */
 export function upbitCandles(q: URLSearchParams): Promise<unknown> {
   const unit = q.get('unit') || '';
   const market = (q.get('market') || '').toUpperCase();
@@ -45,7 +47,18 @@ export function upbitCandles(q: URLSearchParams): Promise<unknown> {
   if (!CANDLE_UNITS.has(unit)) throw new UpstreamError(400, 'invalid unit');
   if (!/^KRW-[A-Z0-9]{1,15}$/.test(market)) throw new UpstreamError(400, 'invalid market');
   if (!(count >= 1 && count <= 200)) throw new UpstreamError(400, 'invalid count');
+  const to = q.get('to');
+  if (to !== null) {
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(to)) throw new UpstreamError(400, 'invalid to');
+    return cachedGet(`${UPBIT_API}/candles/${unit}?market=${market}&count=${count}&to=${to}`, PAST_CANDLES_TTL_MS);
+  }
   return cachedGet(`${UPBIT_API}/candles/${unit}?market=${market}&count=${count}`, CANDLES_TTL_MS);
+}
+
+/** GET /api/upbit/markets: 원화 마켓 목록과 한글·영문 이름 */
+export async function upbitMarkets(): Promise<unknown> {
+  const list = (await cachedGet(`${UPBIT_API}/market/all?isDetails=false`, MARKETS_TTL_MS)) as { market: string }[];
+  return list.filter((m) => m.market.startsWith('KRW-'));
 }
 
 /** GET /api/upbit/tickers: 원화 마켓 전체 시세 */

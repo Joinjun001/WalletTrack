@@ -11,6 +11,9 @@ import { getUpbit } from './historyApi.ts';
 // BTC/USDT는 상단 바, 나머지는 코인 시세 표와 차트가 함께 쓴다 (업비트 연결 하나로 공유)
 const UPBIT_CODES = Array.from(new Set(['KRW-BTC', 'KRW-USDT', ...COINS.map((c) => `KRW-${c.symbol}`)]));
 const UPBIT_REST = `https://api.upbit.com/v1/ticker?markets=${UPBIT_CODES.join(',')}`;
+// 실시간으로 받을 마켓. 코인 사이드바가 원화 마켓 전체로 넓힌다
+let wsCodes = UPBIT_CODES;
+let upbitWs: WebSocket | null = null;
 const UPBIT_WS = 'wss://api.upbit.com/websocket/v1';
 const FEAR_GREED_API = 'https://api.alternative.me/fng/';
 const FEAR_GREED_REFRESH_MS = 60 * 60 * 1000;
@@ -29,7 +32,7 @@ export interface UpbitTicker {
 type TickerListener = (market: string, t: UpbitTicker) => void;
 const tickerListeners: TickerListener[] = [];
 
-/** 업비트 원화 마켓 시세 수신 (UPBIT_CODES 전체) */
+/** 업비트 원화 마켓 시세 수신 (기본 UPBIT_CODES, subscribeUpbitMarkets로 넓힌 마켓 포함) */
 export function onUpbitTicker(fn: TickerListener) {
   tickerListeners.push(fn);
 }
@@ -57,13 +60,23 @@ async function fetchUpbitOnce() {
   list?.filter((t) => t.market && wanted.has(t.market)).forEach(applyUpbitTicker);
 }
 
+/** 실시간으로 받을 마켓을 넓힌다 (기본 마켓은 항상 포함). 연결을 새로 연다 */
+export function subscribeUpbitMarkets(markets: string[]) {
+  wsCodes = Array.from(new Set([...UPBIT_CODES, ...markets]));
+  const old = upbitWs;
+  upbitWs = null; // 닫힌 연결이 다시 연결하지 않게
+  old?.close();
+  connectUpbitWebSocket();
+}
+
 function connectUpbitWebSocket() {
   const ws = new WebSocket(UPBIT_WS);
+  upbitWs = ws;
   ws.binaryType = 'arraybuffer';
   const decoder = new TextDecoder();
 
   ws.onopen = () => {
-    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: UPBIT_CODES }]));
+    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: wsCodes }]));
   };
   ws.onmessage = (event) => {
     try {
@@ -74,6 +87,7 @@ function connectUpbitWebSocket() {
     }
   };
   ws.onclose = () => {
+    if (upbitWs !== ws) return; // subscribeUpbitMarkets가 새 연결로 바꿨다
     console.warn('Upbit WS Closed, reconnecting in 2 seconds...');
     setTimeout(connectUpbitWebSocket, 2000);
   };

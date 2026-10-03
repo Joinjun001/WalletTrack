@@ -54,7 +54,18 @@
     </header>
 
     <div class="dashboard">
-      <!-- 차트 + 탭 (고래 피드 / 코인 시세 / 선물·청산) -->
+      <!-- 코인 고르기: 업비트 원화 마켓 전체 (coinSidebar.ts) -->
+      <aside class="coin-sidebar glass-panel" aria-label="코인 목록">
+        <input id="coin-search" class="coin-search" type="search" placeholder="코인 검색 (이름·심볼)" autocomplete="off" aria-label="코인 검색">
+        <div class="coin-sort" role="group" aria-label="정렬">
+          <button class="interval-btn coin-sort-btn active" data-sort="volume">거래대금</button>
+          <button class="interval-btn coin-sort-btn" data-sort="up">상승</button>
+          <button class="interval-btn coin-sort-btn" data-sort="down">하락</button>
+        </div>
+        <ul id="coin-list" class="coin-list"><li class="coin-list-empty">불러오는 중...</li></ul>
+      </aside>
+
+      <!-- 차트 + 탭 (고래 피드 / 선물·청산 / 기록 추이) -->
       <section class="feed-column">
         <div class="chart-card glass-panel">
           <div class="chart-head">
@@ -72,7 +83,6 @@
 
         <nav class="tab-bar" role="tablist">
           <button class="tab-btn active" role="tab" aria-selected="true" data-tab="whale">🐋 고래 피드</button>
-          <button class="tab-btn" role="tab" aria-selected="false" data-tab="coins">🪙 코인 시세</button>
           <button class="tab-btn" role="tab" aria-selected="false" data-tab="futures">💥 선물·청산</button>
           <button class="tab-btn" role="tab" aria-selected="false" data-tab="history">📈 기록 추이</button>
         </nav>
@@ -110,72 +120,39 @@
           </main>
         </div>
 
-        <div class="tab-panel" role="tabpanel" data-panel="coins" hidden>
-          <div class="glass-panel table-card">
-            <table class="coin-table">
-              <thead>
-                <tr>
-                  <th>코인</th>
-                  <th class="num">현재가</th>
-                  <th class="num">전일 대비</th>
-                  <th class="num" title="업비트 원화 가격 ÷ (바이낸스 달러 가격 × 업비트 USDT 가격) - 1">김프</th>
-                  <th class="num hide-mobile">거래대금(24h)</th>
-                </tr>
-              </thead>
-              <tbody id="coin-table-body"></tbody>
-            </table>
-            <p class="table-note">업비트 원화 마켓 · 바이낸스 USDT 마켓 실시간 · 행을 누르면 위 차트가 바뀌어요</p>
-          </div>
-
-          <div class="movers-grid">
-            <div class="info-card glass-panel">
-              <h2 class="info-title">🚀 상승 TOP 5 <span class="info-unit">업비트 원화 · 전일 대비</span></h2>
-              <ul id="movers-up" class="mover-list"><li class="liq-empty">불러오는 중...</li></ul>
-            </div>
-            <div class="info-card glass-panel">
-              <h2 class="info-title">📉 하락 TOP 5 <span class="info-unit">업비트 원화 · 전일 대비</span></h2>
-              <ul id="movers-down" class="mover-list"><li class="liq-empty">불러오는 중...</li></ul>
-            </div>
-          </div>
-          <p class="table-note">24시간 거래대금 10억원 이상 코인 · 30초마다 갱신 · 누르면 위 차트가 바뀌어요</p>
-        </div>
-
         <div class="tab-panel" role="tabpanel" data-panel="futures" hidden>
           <p id="futures-status" class="table-note" hidden>바이낸스 선물 데이터를 불러오지 못했어요 (일부 지역에서는 접속이 막혀 있어요)</p>
-          <div class="futures-grid">
-            <div class="info-card glass-panel">
+          <div class="futures-grid futures-strip glass-panel">
+            <div class="strip-item">
               <h2 class="info-title" data-help="funding">💸 펀딩비 <span class="info-unit">BTCUSDT 무기한</span></h2>
               <div class="info-main" id="fut-funding">-</div>
               <div class="info-sub" id="fut-funding-countdown">-</div>
             </div>
-            <div class="info-card glass-panel">
+            <div class="strip-item">
               <h2 class="info-title" data-help="oi">📦 미결제약정 <span class="info-unit">OI</span></h2>
               <div class="info-main" id="fut-oi">-</div>
               <div class="info-sub" id="fut-oi-usd">-</div>
             </div>
-            <div class="info-card glass-panel">
+            <div class="strip-item">
               <h2 class="info-title" data-help="longShort">⚖️ 롱/숏 비율 <span class="info-unit">계정 수, 5분</span></h2>
               <div class="ls-bar"><div id="fut-ls-bar" class="ls-bar-long"></div></div>
               <div class="ls-labels"><span id="fut-long-pct" class="up">-</span><span id="fut-short-pct" class="down">-</span></div>
             </div>
           </div>
 
-          <div class="glass-panel table-card card-gap">
-            <h2 class="info-title table-title" data-help="fundingTable">💸 코인별 펀딩비 <span class="info-unit">바이낸스 무기한 · 30초마다 갱신</span></h2>
-            <table class="coin-table static-table">
-              <thead>
-                <tr>
-                  <th>코인</th>
-                  <th class="num">펀딩비</th>
-                  <th class="num hide-mobile" title="8시간마다 정산된다고 보고 1년으로 환산">연환산</th>
-                  <th class="num">마크 가격</th>
-                </tr>
-              </thead>
-              <tbody id="funding-table-body"></tbody>
-            </table>
-            <p class="table-note">펀딩비가 +면 롱이 숏에게 지불해요 (롱 과열)</p>
+          <div class="glass-panel liq-card card-gap">
+            <div class="liq-head">
+              <h2 class="info-title" data-help="liquidations">🔥 실시간 강제청산 <span class="info-unit">바이낸스 선물 전체 · $1K 이상</span></h2>
+              <div class="liq-totals">
+                <span>롱 청산 <strong id="liq-long-total" class="down">$0</strong></span>
+                <span>숏 청산 <strong id="liq-short-total" class="up">$0</strong></span>
+                <span id="liq-totals-note" class="info-unit">페이지를 연 뒤부터</span>
+              </div>
+            </div>
+            <ul id="liq-feed" class="liq-feed">
+              <li class="liq-empty">청산 주문을 기다리는 중...</li>
+            </ul>
           </div>
-
           <div class="glass-panel liq-card card-gap">
             <h2 class="info-title" data-help="liqStats">📊 청산 통계 <span class="info-unit">서버 기록 · 1분마다 갱신</span></h2>
             <p id="liq-stats-status" class="table-note" hidden>기록 서버에 연결할 수 없어요</p>
@@ -197,19 +174,22 @@
             </div>
           </div>
 
-          <div class="glass-panel liq-card">
-            <div class="liq-head">
-              <h2 class="info-title" data-help="liquidations">🔥 실시간 강제청산 <span class="info-unit">바이낸스 선물 전체 · $1K 이상</span></h2>
-              <div class="liq-totals">
-                <span>롱 청산 <strong id="liq-long-total" class="down">$0</strong></span>
-                <span>숏 청산 <strong id="liq-short-total" class="up">$0</strong></span>
-                <span id="liq-totals-note" class="info-unit">페이지를 연 뒤부터</span>
-              </div>
-            </div>
-            <ul id="liq-feed" class="liq-feed">
-              <li class="liq-empty">청산 주문을 기다리는 중...</li>
-            </ul>
+          <div class="glass-panel table-card">
+            <h2 class="info-title table-title" data-help="fundingTable">💸 코인별 펀딩비 <span class="info-unit">바이낸스 무기한 · 30초마다 갱신</span></h2>
+            <table class="coin-table static-table">
+              <thead>
+                <tr>
+                  <th>코인</th>
+                  <th class="num">펀딩비</th>
+                  <th class="num hide-mobile" title="8시간마다 정산된다고 보고 1년으로 환산">연환산</th>
+                  <th class="num">마크 가격</th>
+                </tr>
+              </thead>
+              <tbody id="funding-table-body"></tbody>
+            </table>
+            <p class="table-note">펀딩비가 +면 롱이 숏에게 지불해요 (롱 과열)</p>
           </div>
+
         </div>
 
         <div class="tab-panel" role="tabpanel" data-panel="history" hidden>

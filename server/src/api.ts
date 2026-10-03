@@ -9,7 +9,7 @@
  * GET /api/whales/flow?hours=24
  * GET /api/futures?symbol=BTCUSDT&hours=24
  * GET /api/kimchi?symbol=BTC&hours=24
- * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200, /api/upbit/tickers: 업비트 시세 중계 (upbitProxy.ts)
+ * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...], /api/upbit/tickers, /api/upbit/markets: 업비트 중계 (upbitProxy.ts)
  *
  * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts)
  */
@@ -19,7 +19,7 @@ import type { IncomingMessage } from 'node:http';
 import { config, log } from './config.ts';
 import { query } from './db.ts';
 import { BadRequest, rateLimiter, saveEvents, saveFeedback } from './usage.ts';
-import { UpstreamError, upbitCandles, upbitTickers } from './upbitProxy.ts';
+import { UpstreamError, upbitCandles, upbitMarkets, upbitTickers } from './upbitProxy.ts';
 
 type Params = URLSearchParams;
 
@@ -171,7 +171,8 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
   },
 
   '/api/upbit/candles': async (q) => upbitCandles(q),
-  '/api/upbit/tickers': async () => upbitTickers()
+  '/api/upbit/tickers': async () => upbitTickers(),
+  '/api/upbit/markets': async () => upbitMarkets()
 };
 
 const MAX_BODY_BYTES = 64 * 1024;

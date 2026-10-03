@@ -20,6 +20,13 @@ export const COINS: Coin[] = [
   { symbol: 'SUI', name: '수이' }
 ];
 
+// 업비트 마켓 목록을 받으면 원화 마켓 전체 코인의 한글 이름을 채운다 (코인 사이드바)
+const marketNames = new Map<string, string>();
+
+export function setCoinNames(names: Iterable<[symbol: string, name: string]>) {
+  for (const [symbol, name] of names) marketNames.set(symbol, name);
+}
+
 export function coinName(symbol: string): string {
-  return COINS.find((c) => c.symbol === symbol)?.name ?? symbol;
+  return COINS.find((c) => c.symbol === symbol)?.name ?? marketNames.get(symbol) ?? symbol;
 }

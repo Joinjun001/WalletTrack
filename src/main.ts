@@ -4,12 +4,11 @@ import { initFeedback } from './feedback.ts';
 import { initKrMarket } from './krMarket.ts';
 import { initNetworkPanel } from './networkPanel.ts';
 import { initPriceChart } from './priceChart.ts';
-import { initCoinTable } from './coinTable.ts';
+import { initCoinSidebar } from './coinSidebar.ts';
 import { initFuturesPanel } from './futuresPanel.ts';
 import { initTools } from './tools.ts';
 import { initHistoryCharts } from './historyCharts.ts';
 import { initHistoryStats } from './historyStats.ts';
-import { initTopMovers } from './topMovers.ts';
 import { initSoundAlerts } from './soundAlerts.ts';
 import { initTheme } from './theme.ts';
 import { initHelp } from './help.ts';
@@ -35,16 +34,15 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   initHelp();
   initTabs();
-  // 업비트 시세 구독자(차트, 코인 표)를 먼저 등록한 뒤 업비트 연결을 연다
+  // 업비트 시세 구독자(차트, 코인 사이드바)를 먼저 등록한 뒤 업비트 연결을 연다
   initPriceChart();
-  initCoinTable();
+  initCoinSidebar();
   initKrMarket();
   initNetworkPanel();
   initFuturesPanel();
   initTools();
   initSoundAlerts();
   initLiveStreamDashboard();
-  initTopMovers();
   initHistoryStats();
   initHistoryCharts();
   initFeedback();
