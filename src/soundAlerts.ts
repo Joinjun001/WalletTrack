@@ -1,6 +1,6 @@
 /**
  * 사운드 알림: 큰 강제청산(바이낸스 선물 전체 마켓)과 BTCUSDT 선물 대량 체결이 나면 소리로 알린다.
- * 소리 종류는 청산·체결 따로 고르고(sounds.ts), 볼륨도 정한다. 롱 청산·매도는 내려가는 음, 숏 청산·매수는 올라가는 음.
+ * 소리는 8비트 아르페지오(sounds.ts)이고 볼륨을 정할 수 있다. 롱 청산·매도는 내려가는 음, 숏 청산·매수는 올라가는 음.
  * 청산은 금액이 클수록($100K / $500K / $2M) 단계가 올라가 더 크고 묵직한 소리가 난다. 체결은 기준 대비 배수로 단계를 정한다.
  */
 
@@ -8,16 +8,13 @@ import { onLiveLiquidation } from './futuresPanel.ts';
 import { track } from './analytics.ts';
 import { liquidationSoundTier, tradeSoundTier } from './market.ts';
 import type { SoundTier } from './market.ts';
-import { isSoundStyle, playAlertSound, SOUND_STYLES } from './sounds.ts';
-import type { SoundStyle } from './sounds.ts';
+import { playAlertSound } from './sounds.ts';
 
 // 바이낸스 선물 시장 데이터 스트림은 /market 경로 (futuresPanel.ts 참고)
 const TRADE_WS = 'wss://fstream.binance.com/market/ws/btcusdt@aggTrade';
 const LIQ_SOUND_KEY = 'wallettrack.liqSoundUsd';
 const TRADE_SOUND_KEY = 'wallettrack.tradeSoundUsd';
 const PROMPT_KEY = 'wallettrack.soundPrompt'; // 처음 방문 때 물어본 결과 (accepted | declined)
-const LIQ_STYLE_KEY = 'wallettrack.liqSoundStyle';
-const TRADE_STYLE_KEY = 'wallettrack.tradeSoundStyle';
 const VOLUME_KEY = 'wallettrack.soundVolume'; // 0~100
 const DEFAULT_VOLUME = 70;
 const DEFAULT_LIQ_USD = 100_000;     // 처음 물어볼 때 '소리 켜기'를 누르면 쓰는 기준
@@ -31,7 +28,6 @@ let lastSoundAt = 0;
 let busyUntil = 0; // 3단계 이상 큰 소리가 울리는 동안은 같거나 작은 소리를 건너뛴다
 let busyTier = 0;
 let volume = DEFAULT_VOLUME;
-const styles: Record<Kind, SoundStyle> = { liquidation: 'drum', trade: 'chirp' };
 let promptClosed = false; // 이번 방문에서 안내를 닫았는지
 let liqThreshold = 0;
 let tradeThreshold = 0;
@@ -77,13 +73,13 @@ function applyVolume() {
   if (master) master.gain.value = (volume / 100) ** 2 * 1.5;
 }
 
-function play(kind: Kind, rising: boolean, tier: SoundTier) {
+function play(rising: boolean, tier: SoundTier) {
   if (!audio || !master || audio.state !== 'running' || volume <= 0) return;
   const now = Date.now();
   if (now < busyUntil && tier <= busyTier) return;
   if (tier <= 2 && now - lastSoundAt < MIN_SOUND_GAP_MS) return;
   lastSoundAt = now;
-  const seconds = playAlertSound(audio, master, styles[kind], rising, tier);
+  const seconds = playAlertSound(audio, master, rising, tier);
   if (tier >= 3) {
     busyUntil = now + seconds * 1000;
     busyTier = tier;
@@ -91,9 +87,9 @@ function play(kind: Kind, rising: boolean, tier: SoundTier) {
 }
 
 /** 미리 듣기용: 막힘 없이 바로 울린다 */
-function playNow(kind: Kind, rising: boolean, tier: SoundTier): number {
+function playNow(rising: boolean, tier: SoundTier): number {
   if (!audio || !master || audio.state !== 'running') return 0;
-  return playAlertSound(audio, master, styles[kind], rising, tier);
+  return playAlertSound(audio, master, rising, tier);
 }
 
 function renderNote() {
@@ -119,7 +115,7 @@ let pending: { sell: boolean; usd: number } | null = null;
 let flushTimer = 0;
 
 function flushTrade() {
-  if (pending && pending.usd >= tradeThreshold) play('trade', !pending.sell, tradeSoundTier(pending.usd, tradeThreshold));
+  if (pending && pending.usd >= tradeThreshold) play(!pending.sell, tradeSoundTier(pending.usd, tradeThreshold));
   pending = null;
   flushTimer = 0;
 }
@@ -184,8 +180,8 @@ function setThreshold(kind: Kind, value: number, save: boolean) {
 
 /** 짧은 미리 듣기: 내려가는 음, 올라가는 음 */
 function playPreview() {
-  const seconds = playNow('liquidation', false, 1);
-  setTimeout(() => playNow('liquidation', true, 1), (seconds + 0.15) * 1000);
+  const seconds = playNow(false, 1);
+  setTimeout(() => playNow(true, 1), (seconds + 0.15) * 1000);
 }
 
 let previewTimers: number[] = [];
@@ -199,7 +195,7 @@ function playTierPreview() {
   let delay = 0;
   ([1, 2, 3, 4] as SoundTier[]).forEach((tier, i) => {
     previewTimers.push(window.setTimeout(() => {
-      playNow('liquidation', false, tier);
+      playNow(false, tier);
       if (note) note.textContent = `🔊 롱 청산 ${labels[i]}`;
     }, delay));
     delay += [500, 700, 1300, 0][i];
@@ -207,41 +203,7 @@ function playTierPreview() {
   previewTimers.push(window.setTimeout(renderNote, delay + 2200));
 }
 
-function loadStyle(key: string, fallback: SoundStyle): SoundStyle {
-  try {
-    const value = localStorage.getItem(key);
-    return isSoundStyle(value) ? value : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function initStyleControls() {
-  const styleSelects: Record<Kind, { id: string; key: string }> = {
-    liquidation: { id: 'liq-sound-style', key: LIQ_STYLE_KEY },
-    trade: { id: 'trade-sound-style', key: TRADE_STYLE_KEY }
-  };
-  for (const kind of Object.keys(styleSelects) as Kind[]) {
-    const { id, key } = styleSelects[kind];
-    styles[kind] = loadStyle(key, styles[kind]);
-    const select = document.getElementById(id) as HTMLSelectElement | null;
-    if (!select) continue;
-    select.innerHTML = SOUND_STYLES.map((s) => `<option value="${s.id}">${s.label}</option>`).join('');
-    select.value = styles[kind];
-    select.addEventListener('change', () => {
-      if (!isSoundStyle(select.value)) return;
-      styles[kind] = select.value;
-      try {
-        localStorage.setItem(key, select.value);
-      } catch {
-        // 시크릿 모드 등: 이번 방문 동안만 유지
-      }
-      unlockAudio();
-      setTimeout(() => playNow(kind, kind === 'trade', 2), 100);
-      track('sound_style', { kind, style: select.value });
-    });
-  }
-
+function initVolumeControl() {
   const saved = loadNumber(VOLUME_KEY);
   volume = saved > 0 ? Math.min(100, saved) : DEFAULT_VOLUME;
   const slider = document.getElementById('sound-volume') as HTMLInputElement | null;
@@ -254,7 +216,7 @@ function initStyleControls() {
     slider.addEventListener('change', () => {
       saveNumber(VOLUME_KEY, Math.max(1, volume)); // 0은 '저장 안 됨'과 구분이 안 되므로 1로
       unlockAudio();
-      setTimeout(() => playNow('liquidation', false, 1), 100);
+      setTimeout(() => playNow(false, 1), 100);
       track('sound_volume', { volume });
     });
   }
@@ -334,7 +296,7 @@ function initPrompt() {
 }
 
 export function initSoundAlerts() {
-  initStyleControls();
+  initVolumeControl();
   setThreshold('liquidation', loadNumber(LIQ_SOUND_KEY), false);
   setThreshold('trade', loadNumber(TRADE_SOUND_KEY), false);
 
@@ -345,7 +307,7 @@ export function initSoundAlerts() {
       setThreshold(kind, value, true);
       savePromptChoice(value > 0 ? 'accepted' : 'declined');
       unlockAudio();
-      if (value > 0) setTimeout(() => playNow(kind, true, 1), 100); // 켜자마자 어떤 소리인지 들려준다
+      if (value > 0) setTimeout(() => playNow(true, 1), 100); // 켜자마자 어떤 소리인지 들려준다
       promptClosed = true;
       renderPrompt();
       renderNote();
@@ -376,7 +338,7 @@ export function initSoundAlerts() {
   window.addEventListener('keydown', unlockOnce);
 
   onLiveLiquidation((position, usd) => {
-    if (liqThreshold > 0 && usd >= liqThreshold) play('liquidation', position === 'short', liquidationSoundTier(usd));
+    if (liqThreshold > 0 && usd >= liqThreshold) play(position === 'short', liquidationSoundTier(usd));
   });
 
   initPrompt();
