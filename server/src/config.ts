@@ -18,6 +18,8 @@ export const config = {
   apiPort: num('API_PORT', 8080),
   // 공개 시세 데이터만 읽기 전용으로 제공하므로 기본은 모든 출처 허용
   corsOrigin: process.env.CORS_ORIGIN || '*',
+  // 사용 기록·의견(POST)은 이 사이트에서 보낸 것만 받는다 (다른 사이트가 방문자 브라우저로 가짜 기록을 보내지 못하게)
+  postOrigins: list('POST_ORIGINS', ['https://wallet-track-theta.vercel.app', 'http://localhost:5173', 'http://localhost:4173', 'http://localhost:4174']),
   retentionDays: num('RETENTION_DAYS', 180),
   minWhaleBtc: num('MIN_WHALE_BTC', 0.1),
   futuresSymbols: list('FUTURES_SYMBOLS', ['BTCUSDT', 'ETHUSDT']),

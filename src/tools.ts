@@ -116,7 +116,9 @@ function requestNotificationPermission() {
 /** 목표값을 등록해 두고, 값이 등록 시점 기준 방향으로 목표를 넘으면 한 번 알리고 지운다 */
 function initAlertCard(cfg: AlertCardConfig) {
   const stored = loadJson<unknown>(cfg.storageKey, []);
-  let alerts: PriceAlert[] = Array.isArray(stored) ? stored : [];
+  // 저장된 값이 깨졌거나 형식이 다르면 버린다 (화면에 그대로 그리므로 숫자·방향만 받는다)
+  let alerts: PriceAlert[] = (Array.isArray(stored) ? stored : []).filter((a): a is PriceAlert =>
+    !!a && typeof a === 'object' && typeof a.id === 'string' && Number.isFinite(a.target) && (a.direction === 'above' || a.direction === 'below'));
   const form = document.getElementById(cfg.formId) as HTMLFormElement | null;
   const input = document.getElementById(cfg.inputId) as HTMLInputElement | null;
 

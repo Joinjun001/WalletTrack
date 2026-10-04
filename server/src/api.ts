@@ -14,7 +14,9 @@
  * GET /api/surges?threshold=3&hours=24&limit=50                       업비트 원화 마켓 급등·급락 기록
  * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...], /api/upbit/tickers, /api/upbit/markets: 업비트 중계 (upbitProxy.ts)
  *
- * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts)
+ * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts). config.postOrigins에서 보낸 것만 받는다
+ *
+ * 남용 방지: 조회는 IP별 1분 300회, 업비트 중계는 1분 120회(업비트가 우리 서버 IP를 막지 않게), 구간 합계는 점 5,000개까지.
  */
 
 import { createServer } from 'node:http';
@@ -42,6 +44,16 @@ function symbolParam(q: Params, fallback: string): string {
   const value = (q.get('symbol') || fallback).toUpperCase();
   if (!/^[A-Z0-9]{2,20}$/.test(value)) throw new HttpError(400, 'invalid symbol');
   return value;
+}
+
+const MAX_BUCKETS = 5_000;
+
+/** 캔들 구간 합계용: 기간 ÷ 구간이 너무 많으면 거절한다 (한 요청에 수만 행 계산 방지) */
+function bucketParams(q: Params, maxHours: number): { hours: number; minutes: number } {
+  const hours = numParam(q, 'hours', 24, 0.1, maxHours);
+  const minutes = Math.round(numParam(q, 'minutes', 15, 1, 1440));
+  if ((hours * 60) / minutes > MAX_BUCKETS) throw new HttpError(400, 'too many buckets');
+  return { hours, minutes };
 }
 
 /** 조회 기간이 길면 평균을 내서 점 개수를 줄인다 (분 단위 버킷) */
@@ -151,18 +163,20 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
 
   // 구간은 'epoch' 기준이라 업비트 분봉·일봉(UTC 0시 = KST 9시) 경계와 맞는다
   '/api/liquidations/buckets': async (q) => {
+    const { hours, minutes } = bucketParams(q, 24 * 30);
     const rows = await query<{ t: Date; long_usd: number; short_usd: number }>(
       `SELECT date_bin($3::int * interval '1 minute', occurred_at, 'epoch') AS t,
               coalesce(sum(usd_value) FILTER (WHERE position = 'long'), 0) AS long_usd,
               coalesce(sum(usd_value) FILTER (WHERE position = 'short'), 0) AS short_usd
        FROM liquidations WHERE symbol = $1 AND occurred_at > now() - $2::float8 * interval '1 hour'
        GROUP BY t ORDER BY t`,
-      [symbolParam(q, 'BTCUSDT'), numParam(q, 'hours', 24, 0.1, 24 * 30), Math.round(numParam(q, 'minutes', 15, 1, 1440))]
+      [symbolParam(q, 'BTCUSDT'), hours, minutes]
     );
     return rows.map((r) => ({ t: ms(r.t), longUsd: r.long_usd, shortUsd: r.short_usd }));
   },
 
   '/api/whales/buckets': async (q) => {
+    const { hours, minutes } = bucketParams(q, 24 * 30);
     const rows = await query<{ t: Date; deposit_btc: number; withdrawal_btc: number }>(
       `SELECT date_bin($2::int * interval '1 minute', detected_at, 'epoch') AS t,
               coalesce(sum(btc_amount) FILTER (WHERE direction = 'deposit'), 0) AS deposit_btc,
@@ -170,7 +184,7 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
        FROM whale_txs WHERE direction IN ('deposit', 'withdrawal') AND btc_amount >= $3
          AND detected_at > now() - $1::float8 * interval '1 hour'
        GROUP BY t ORDER BY t`,
-      [numParam(q, 'hours', 24, 0.1, 24 * 30), Math.round(numParam(q, 'minutes', 15, 1, 1440)), numParam(q, 'minBtc', 1, 0, 1e6)]
+      [hours, minutes, numParam(q, 'minBtc', 1, 0, 1e6)]
     );
     return rows.map((r) => ({ t: ms(r.t), depositBtc: r.deposit_btc, withdrawalBtc: r.withdrawal_btc }));
   },
@@ -229,6 +243,8 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
 };
 
 const MAX_BODY_BYTES = 64 * 1024;
+const allowGet = rateLimiter(300, 60_000);   // 페이지 하나가 1분에 수십 번 부르는 정도
+const allowUpbit = rateLimiter(120, 60_000); // 업비트 중계는 캐시를 우회하는 요청을 막으려고 더 엄격하게
 
 const postRoutes: Record<string, { handle: (body: unknown) => Promise<unknown>; allow: (key: string) => boolean }> = {
   '/api/events': { handle: saveEvents, allow: rateLimiter(120, 60_000) },       // 1분에 120번
@@ -271,7 +287,8 @@ const server = createServer(async (req, res) => {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'public, max-age=10'
+    'Cache-Control': 'public, max-age=10',
+    'X-Content-Type-Options': 'nosniff'
   };
   const send = (status: number, body: unknown) => {
     res.writeHead(status, headers);
@@ -289,6 +306,7 @@ const server = createServer(async (req, res) => {
     headers['Cache-Control'] = 'no-store';
     const route = postRoutes[url.pathname.replace(/\/$/, '')];
     if (!route) return send(404, { error: 'not found' });
+    if (!config.postOrigins.includes(String(req.headers.origin || ''))) return send(403, { error: 'origin not allowed' });
     if (!route.allow(clientAddress(req))) return send(429, { error: 'too many requests' });
     try {
       send(200, await route.handle(await readBody(req)));
@@ -305,6 +323,8 @@ const server = createServer(async (req, res) => {
   const pathname = url.pathname.replace(/\/$/, '');
   const handler = routes[pathname];
   if (!handler) return send(404, { error: 'not found' });
+  const address = clientAddress(req);
+  if (!allowGet(address) || (pathname.startsWith('/api/upbit/') && !allowUpbit(address))) return send(429, { error: 'too many requests' });
   // 업비트 중계는 실시간 시세라 브라우저·프록시 캐시를 짧게
   if (pathname.startsWith('/api/upbit/')) headers['Cache-Control'] = 'public, max-age=2';
 

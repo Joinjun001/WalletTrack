@@ -29,7 +29,8 @@ async function waitForServer() {
   throw new Error(`미리보기 서버가 뜨지 않았어요 (${URL})`);
 }
 
-const preview = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore' });
+// detached: npx 안에서 뜬 vite까지 프로세스 그룹째 끄려고 (npx만 끄면 vite가 남는다)
+const preview = spawn('npx', ['vite', 'preview', '--port', String(PORT), '--strictPort'], { stdio: 'ignore', detached: true });
 try {
   await waitForServer();
   const browser = await chromium.launch();
@@ -45,5 +46,5 @@ try {
   }
   await browser.close();
 } finally {
-  preview.kill();
+  process.kill(-preview.pid);
 }

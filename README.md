@@ -166,7 +166,9 @@ WalletTrack/
 │   ├── market.test.ts        # 시세/네트워크 계산 테스트
 │   ├── exchangeFeeds.test.ts # 거래소 메시지 해석·체결 묶기 테스트
 │   ├── surge.test.ts         # 급등·급락 판정 테스트
+│   ├── securityHeaders.test.ts # CSP가 인라인 스크립트 해시·외부 연결 주소를 모두 담고 있는지
 │   └── txAnalysis.test.ts    # 분석 로직 테스트
+├── vercel.json               # 웹 보안 헤더 (CSP·iframe 차단 등). 외부 주소를 추가하면 connect-src에도
 ├── package.json
 ├── vite.config.ts
 └── tsconfig.json

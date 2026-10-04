@@ -127,6 +127,15 @@ docker compose logs -f collector     # "연결됨", 10분마다 "최근 10분 �
 curl https://bittrack.duckdns.org/api/health
 ```
 
+## 보안
+
+- 조회 API: IP별 1분 300회, 업비트 중계(`/api/upbit/*`)는 1분 120회 (캐시를 우회하는 요청으로 업비트가 서버 IP를 막지 않게). 넘으면 429.
+- 구간 합계(`/api/*/buckets`): 기간 ÷ 구간이 5,000개를 넘으면 400.
+- POST(`/api/events`, `/api/feedback`): `POST_ORIGINS`(기본: 배포 사이트·로컬 개발 주소)에서 보낸 것만 받는다. 그 외 403.
+- 모든 응답에 `X-Content-Type-Options: nosniff`. 실제 접속 주소는 nginx가 `X-Forwarded-For` 끝에 붙인 값을 쓴다 (앞쪽 값은 조작 가능).
+- nginx: `server_tokens off` (버전 숨김, `/etc/nginx/nginx.conf`, 2026-10-04 적용. 원본은 `nginx.conf.bak-2026-10-04`).
+- DB는 외부 포트가 없고, API는 `127.0.0.1:8080`에만 열린다. 컨테이너는 `node` 사용자로 실행한다.
+
 ## 운영
 
 ```bash
