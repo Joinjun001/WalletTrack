@@ -12,6 +12,7 @@ import { initHistoryStats } from './historyStats.ts';
 import { initSoundAlerts } from './soundAlerts.ts';
 import { initTheme } from './theme.ts';
 import { initHelp } from './help.ts';
+import { initSurgeFeed } from './surgeFeed.ts';
 
 function initTabs() {
   const buttons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
@@ -37,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // 업비트 시세 구독자(차트, 코인 사이드바)를 먼저 등록한 뒤 업비트 연결을 연다
   initPriceChart();
   initCoinSidebar();
+  initSurgeFeed();
   initKrMarket();
   initNetworkPanel();
   initFuturesPanel();

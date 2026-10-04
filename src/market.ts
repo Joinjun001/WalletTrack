@@ -167,3 +167,63 @@ export function formatDurationKo(ms: number): string {
   if (hours > 0) return `${hours}시간 ${minutes % 60}분`;
   return `${minutes}분`;
 }
+
+/** 급등·급락 감지용 가격 구간 (구간마다 최저·최고가) */
+export interface PriceBucket {
+  t: number;  // 구간 시작 ms
+  lo: number;
+  hi: number;
+}
+
+/** 실시간 가격을 bucketMs 단위 구간에 넣고, windowMs보다 오래된 구간은 버린다 (배열을 직접 고친다) */
+export function pushPriceBucket(buckets: PriceBucket[], price: number, nowMs: number, bucketMs: number, windowMs: number): void {
+  if (!(price > 0)) return;
+  const t = Math.floor(nowMs / bucketMs) * bucketMs;
+  const last = buckets[buckets.length - 1];
+  if (last && last.t === t) {
+    last.lo = Math.min(last.lo, price);
+    last.hi = Math.max(last.hi, price);
+  } else {
+    buckets.push({ t, lo: price, hi: price });
+  }
+  while (buckets.length > 0 && buckets[0].t < nowMs - windowMs) buckets.shift();
+}
+
+export interface Surge {
+  direction: 'up' | 'down';
+  pct: number;  // 구간 최저가(급등)·최고가(급락) 대비 지금 가격 변화 (%)
+  from: number; // 기준 가격
+}
+
+/** 최근 구간의 최저가보다 thresholdPct% 이상 오르면 급등, 최고가보다 그만큼 내리면 급락. 둘 다면 더 큰 쪽 */
+export function detectSurge(buckets: PriceBucket[], price: number, thresholdPct: number): Surge | null {
+  if (!(price > 0) || buckets.length === 0) return null;
+  const lo = Math.min(...buckets.map((b) => b.lo));
+  const hi = Math.max(...buckets.map((b) => b.hi));
+  const rise = (price / lo - 1) * 100;
+  const fall = (price / hi - 1) * 100;
+  const up = rise >= thresholdPct ? { direction: 'up' as const, pct: rise, from: lo } : null;
+  const down = fall <= -thresholdPct ? { direction: 'down' as const, pct: fall, from: hi } : null;
+  if (up && down) return Math.abs(up.pct) >= Math.abs(down.pct) ? up : down;
+  return up ?? down;
+}
+
+/** 값이 큰 순서로 n개, 단 minValue 이상만. 결과는 원래 순서(시간순)를 유지한다 */
+export function topByValue<T>(list: T[], value: (item: T) => number, n: number, minValue: number): T[] {
+  const keep = new Set([...list].filter((item) => value(item) >= minValue).sort((a, b) => value(b) - value(a)).slice(0, n));
+  return list.filter((item) => keep.has(item));
+}
+
+/**
+ * 업비트 원화 가격과 해외 달러 가격의 김프. 같은 심볼이 다른 코인인 경우(드물다)는 차이가 터무니없이 커서 null로 거른다.
+ */
+export function coinKimchiPremium(krw: number, usd: number, krwUsdt: number): number | null {
+  const premium = kimchiPremium(krw, usd, krwUsdt);
+  return premium !== null && Math.abs(premium) <= 50 ? premium : null;
+}
+
+/** 코인 달러 가격: 1달러 이상은 소수 2자리, 0.01 이상은 4자리, 그 미만은 유효숫자 4자리 */
+export function formatUsdPrice(price: number): string {
+  const digits = price >= 1 ? 2 : price >= 0.01 ? 4 : Math.min(10, 3 - Math.floor(Math.log10(price)));
+  return `$${price.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}

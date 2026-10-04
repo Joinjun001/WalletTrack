@@ -35,6 +35,20 @@ export interface LiquidationBySymbol {
   shortUsd: number;
 }
 
+/** 캔들 구간별 청산 합계 (차트 표시) */
+export interface LiquidationBucket {
+  t: number; // 구간 시작 ms
+  longUsd: number;
+  shortUsd: number;
+}
+
+/** 캔들 구간별 고래 거래소 입출금 합계 (차트 표시) */
+export interface WhaleBucket {
+  t: number;
+  depositBtc: number;
+  withdrawalBtc: number;
+}
+
 export interface WhaleFlow {
   hours: number;
   depositBtc: number;

@@ -1024,6 +1024,7 @@ body {
 @media (max-width: 480px) {
   .sound-prompt { flex-direction: column; align-items: stretch; text-align: center; }
   .sound-prompt-actions > button { flex: 1; padding: 0.55rem; }
+  .stat-coin { display: none; } /* 좁은 화면은 위 BTC / KRW 표시로 충분 */
 }
 
 :root[data-theme="light"] .main-btc-price { text-shadow: none; }
@@ -1315,6 +1316,100 @@ body {
 .futures-strip .strip-item:first-child { border-left: none; }
 .futures-strip .info-title { margin-bottom: 0.3rem; }
 .futures-strip .info-main { font-size: 1.3rem; }
+
+/* 사이드바 검색 + 관심 코인만 보기 */
+.coin-search-row {
+  display: flex;
+  gap: 0.3rem;
+  margin: 0 0.25rem 0.5rem;
+}
+
+.coin-search-row .coin-search { flex: 1; min-width: 0; margin: 0; }
+.coin-fav-filter { flex-shrink: 0; width: 2.1rem; padding: 0; font-size: 0.95rem; }
+.coin-fav-filter.active { color: #FFC107; }
+
+.coin-sort { grid-template-columns: 1.3fr 1fr 1fr 1fr; }
+.coin-sort .interval-btn { padding: 0.25rem 0.2rem; white-space: nowrap; }
+
+.coin-fav {
+  flex-shrink: 0;
+  margin-left: 0.3rem;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1;
+  vertical-align: -1px;
+  cursor: pointer;
+  opacity: 0.45;
+}
+
+.coin-fav:hover, .coin-fav.on { opacity: 1; }
+.coin-fav.on { color: #FFC107; }
+
+/* 상단 바: 김프가 어느 코인 기준인지 */
+.stat-coin {
+  margin-left: 0.15rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--btc-gold);
+}
+
+/* 차트 위 청산·고래 표시 켜고 끄기 */
+.marker-group { align-items: center; margin-left: auto; }
+.marker-label { font-size: 0.75rem; color: var(--text-muted); margin-right: 0.1rem; }
+.marker-btn:disabled { opacity: 0.4; cursor: default; }
+.marker-btn:disabled:hover { background: var(--surface-1); border-color: var(--line-strong); color: var(--text-muted); }
+
+/* 탭의 안 본 개수 */
+.tab-badge {
+  display: inline-block;
+  min-width: 1.2rem;
+  margin-left: 0.25rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--btc-gold);
+  color: #111;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.2rem;
+  text-align: center;
+}
+
+.tab-badge[hidden] { display: none; }
+
+/* 급등·급락 피드 (surgeFeed.ts) */
+.surge-item {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr) 5rem minmax(0, 11rem) 4.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.surge-item.up { background: rgba(var(--up-rgb), 0.1); border-left: 3px solid var(--up); }
+.surge-item.down { background: rgba(var(--down-rgb), 0.12); border-left: 3px solid var(--down); }
+.surge-item:hover, .surge-item:focus-visible { outline: 1px solid var(--line-strong); }
+.surge-side { font-weight: 800; white-space: nowrap; }
+.surge-item.up .surge-side, .surge-item.up .surge-pct { color: var(--up); }
+.surge-item.down .surge-side, .surge-item.down .surge-pct { color: var(--down); }
+.surge-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.surge-name span { font-size: 0.75rem; color: var(--text-muted); }
+.surge-pct { font-family: var(--font-mono); font-weight: 800; text-align: right; }
+.surge-price { font-family: var(--font-mono); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.surge-vol { font-size: 0.72rem; color: var(--text-muted); }
+.surge-item .liq-time { text-align: right; }
+
+@media (max-width: 600px) {
+  .surge-item { grid-template-columns: 4rem minmax(0, 1fr) 4.5rem 4rem; }
+  .surge-price { display: none; }
+  .marker-group { margin-left: 0; }
+}
 
 @media (max-width: 1200px) {
   .dashboard { grid-template-columns: minmax(0, 1fr) 300px; }

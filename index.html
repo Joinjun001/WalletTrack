@@ -34,7 +34,7 @@
       <button id="theme-toggle" type="button" class="theme-toggle" aria-label="테마 바꾸기">☀️</button>
       <div class="price-box">
         <div class="price-label-row">
-          <span class="price-label">BTC / KRW</span>
+          <span id="price-label" class="price-label">BTC / KRW</span>
         </div>
         <div class="main-price-row">
           <h1 id="krw-btc-price" class="main-btc-price">-</h1>
@@ -44,11 +44,11 @@
 
       <div class="header-stats">
         <div class="stat">
-          <span class="stat-label">BTC / USD</span>
+          <span id="usd-label" class="stat-label">BTC / USD</span>
           <span class="stat-value"><span id="usd-btc-price">-</span> <span id="usd-change" class="stat-sub" title="24시간 변동">-</span></span>
         </div>
         <div class="stat">
-          <span class="stat-label" data-help="kimchi">김치 프리미엄</span>
+          <span class="stat-label" data-help="kimchi">김치 프리미엄 <span id="kimchi-coin-label" class="stat-coin">BTC</span></span>
           <span id="kimchi-premium" class="stat-value">-</span>
         </div>
         <div class="stat">
@@ -61,11 +61,15 @@
     <div class="dashboard">
       <!-- 코인 고르기: 업비트 원화 마켓 전체 (coinSidebar.ts) -->
       <aside class="coin-sidebar glass-panel" aria-label="코인 목록">
-        <input id="coin-search" class="coin-search" type="search" placeholder="코인 검색 (이름·심볼)" autocomplete="off" aria-label="코인 검색">
+        <div class="coin-search-row">
+          <input id="coin-search" class="coin-search" type="search" placeholder="코인 검색 (이름·심볼)" autocomplete="off" aria-label="코인 검색">
+          <button id="coin-fav-filter" type="button" class="interval-btn coin-fav-filter" aria-pressed="false" aria-label="관심 코인만 보기" title="관심 코인만 보기">☆</button>
+        </div>
         <div class="coin-sort" role="group" aria-label="정렬">
           <button class="interval-btn coin-sort-btn active" data-sort="volume">거래대금</button>
           <button class="interval-btn coin-sort-btn" data-sort="up">상승</button>
           <button class="interval-btn coin-sort-btn" data-sort="down">하락</button>
+          <button class="interval-btn coin-sort-btn" data-sort="kimp" title="김프 높은 순">김프</button>
         </div>
         <ul id="coin-list" class="coin-list"><li class="coin-list-empty">불러오는 중...</li></ul>
       </aside>
@@ -75,6 +79,11 @@
         <div class="chart-card glass-panel">
           <div class="chart-head">
             <h2 id="chart-title" class="chart-title">비트코인 BTC/KRW</h2>
+            <div class="interval-group marker-group" role="group" aria-label="차트에 표시">
+              <span class="marker-label" data-help="chartMarkers">표시</span>
+              <button type="button" class="interval-btn marker-btn" data-marker="liq" title="큰 강제청산 (바이낸스 선물, 이 코인)">💥 청산</button>
+              <button type="button" class="interval-btn marker-btn" data-marker="whale" title="고래 거래소 입금·출금 (비트코인)">🐋 고래</button>
+            </div>
             <div class="interval-group">
               <button class="interval-btn" data-interval="1m">1분</button>
               <button class="interval-btn active" data-interval="15m">15분</button>
@@ -88,6 +97,7 @@
 
         <nav class="tab-bar" role="tablist">
           <button class="tab-btn active" role="tab" aria-selected="true" data-tab="whale">🐋 고래 피드</button>
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="surge">🚀 급등·급락 <span id="surge-badge" class="tab-badge" hidden></span></button>
           <button class="tab-btn" role="tab" aria-selected="false" data-tab="futures">💥 선물·청산</button>
           <button class="tab-btn" role="tab" aria-selected="false" data-tab="history">📈 기록 추이</button>
         </nav>
@@ -123,6 +133,27 @@
               </div>
             </div>
           </main>
+        </div>
+
+        <div class="tab-panel" role="tabpanel" data-panel="surge" hidden>
+          <div class="control-bar glass-panel">
+            <div class="control-left">
+              <span class="filter-label" data-help="surge">5분 변동 기준:</span>
+              <button class="threshold-btn surge-btn" data-surge="2">±2%</button>
+              <button class="threshold-btn surge-btn active" data-surge="3">±3%</button>
+              <button class="threshold-btn surge-btn" data-surge="5">±5%</button>
+              <button class="threshold-btn surge-btn" data-surge="10">±10%</button>
+            </div>
+            <div class="control-right">
+              <button id="surge-toast-toggle" type="button" class="threshold-btn" aria-pressed="false">🔕 화면 알림 끔</button>
+            </div>
+          </div>
+          <div class="glass-panel liq-card">
+            <h2 class="info-title">🚀 급등·급락 포착 <span class="info-unit">업비트 원화 마켓 전체 · 누르면 차트로</span></h2>
+            <ul id="surge-feed" class="liq-feed surge-feed">
+              <li class="liq-empty">5분 안에 ±3% 이상 움직인 코인을 실시간으로 잡아요. 페이지를 연 뒤부터 모아요.</li>
+            </ul>
+          </div>
         </div>
 
         <div class="tab-panel" role="tabpanel" data-panel="futures" hidden>
@@ -274,7 +305,7 @@
         </div>
 
         <div class="info-card glass-panel">
-          <h2 class="info-title">📊 오늘 시세 <span class="info-unit">업비트 9시 기준</span></h2>
+          <h2 class="info-title">📊 오늘 시세 <span class="info-unit"><span id="range-coin-label">BTC</span> · 업비트 9시 기준</span></h2>
           <div class="range-row"><span class="fee-label">고가</span><strong id="krw-high" class="up">-</strong></div>
           <div class="range-row"><span class="fee-label">저가</span><strong id="krw-low" class="down">-</strong></div>
         </div>

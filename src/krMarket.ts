@@ -1,12 +1,15 @@
 /**
- * Korean market panel: Upbit KRW price (WebSocket), kimchi premium, Fear & Greed index
+ * 업비트 원화 시세(WebSocket, 사이드바·차트와 공유), 상단 시세 바, 공포·탐욕 지수.
+ * 상단 시세 바와 오늘 시세(고가·저가)는 지금 보고 있는 코인(selectedCoin.ts)을 따라간다.
  */
 
 import { prices, subscribePrices, updatePrices } from './priceStore.ts';
-import type { Prices } from './priceStore.ts';
-import { kimchiPremium, formatKrw, formatSignedPct, fearGreedLabelKo } from './market.ts';
+import { coinKimchiPremium, formatKrwPrice, formatSignedPct, formatUsdPrice, fearGreedLabelKo } from './market.ts';
 import { COINS } from './coins.ts';
 import { getUpbit } from './historyApi.ts';
+import { selectedCoin, onSelectedCoinChange } from './selectedCoin.ts';
+import { onUsdQuote, usdQuote } from './binanceSpot.ts';
+import type { UsdQuote } from './binanceSpot.ts';
 
 // BTC/USDT는 상단 바, 나머지는 코인 시세 표와 차트가 함께 쓴다 (업비트 연결 하나로 공유)
 const UPBIT_CODES = Array.from(new Set(['KRW-BTC', 'KRW-USDT', ...COINS.map((c) => `KRW-${c.symbol}`)]));
@@ -32,6 +35,7 @@ export interface UpbitTicker {
 
 type TickerListener = (market: string, t: UpbitTicker) => void;
 const tickerListeners: TickerListener[] = [];
+const latestTickers = new Map<string, UpbitTicker>(); // 마켓별 마지막 시세 (상단 시세 바)
 
 /** 업비트 원화 마켓 시세 수신 (기본 UPBIT_CODES, subscribeUpbitMarkets로 넓힌 마켓 포함) */
 export function onUpbitTicker(fn: TickerListener) {
@@ -41,7 +45,9 @@ export function onUpbitTicker(fn: TickerListener) {
 function applyUpbitTicker(t: UpbitTicker) {
   const market = t.market || t.code;
   if (!market) return;
+  latestTickers.set(market, t);
   for (const fn of tickerListeners) fn(market, t);
+  if (market === `KRW-${selectedCoin()}` || market === 'KRW-USDT') queueHeader();
   if (market === 'KRW-BTC') {
     updatePrices({
       krwBtc: t.trade_price,
@@ -55,10 +61,9 @@ function applyUpbitTicker(t: UpbitTicker) {
 }
 
 async function fetchUpbitOnce() {
-  // 서버 중계는 원화 마켓 전체를 주므로 필요한 것만 쓴다
-  const wanted = new Set(UPBIT_CODES);
+  // 서버 중계는 원화 마켓 전체를 준다 (사이드바에서 어느 코인을 골라도 상단 시세 바가 바로 채워지게 전부 쓴다)
   const list = await getUpbit<UpbitTicker[]>('/upbit/tickers', UPBIT_REST);
-  list?.filter((t) => t.market && wanted.has(t.market)).forEach(applyUpbitTicker);
+  list?.forEach(applyUpbitTicker);
 }
 
 /** 실시간으로 받을 마켓을 넓힌다 (기본 마켓은 항상 포함). 연결을 새로 연다 */
@@ -121,35 +126,73 @@ function setText(id: string, text: string, tone?: number | null) {
   }
 }
 
-let lastKrwBtc = 0;
+let lastPrice = 0;
+let lastSymbol = '';
 
 function flashPrice(elem: HTMLElement, newPrice: number) {
-  if (lastKrwBtc > 0 && newPrice !== lastKrwBtc) {
-    const cls = newPrice > lastKrwBtc ? 'price-up' : 'price-down';
+  if (lastPrice > 0 && newPrice !== lastPrice) {
+    const cls = newPrice > lastPrice ? 'price-up' : 'price-down';
     elem.classList.remove('price-up', 'price-down');
     elem.classList.add(cls);
     setTimeout(() => elem.classList.remove(cls), 600);
   }
-  lastKrwBtc = newPrice;
+  lastPrice = newPrice;
 }
 
-function render(p: Prices) {
-  const krwElem = document.getElementById('krw-btc-price');
-  if (krwElem && p.krwBtc > 0) {
-    if (p.krwBtc !== lastKrwBtc) flashPrice(krwElem, p.krwBtc);
-    krwElem.textContent = formatKrw(p.krwBtc);
-  }
-  if (p.krwChangePct !== null) setText('krw-change', formatSignedPct(p.krwChangePct), p.krwChangePct);
-  if (p.krwHigh > 0) setText('krw-high', formatKrw(p.krwHigh));
-  if (p.krwLow > 0) setText('krw-low', formatKrw(p.krwLow));
+/** 고른 코인의 달러 시세. BTC는 상단 바 전용 연결(24시간 변동 포함, 막히면 mempool.space 가격)을 쓴다 */
+function selectedUsd(symbol: string): UsdQuote | null {
+  if (symbol === 'BTC') return prices.usdBtc > 0 ? { price: prices.usdBtc, changePct: prices.usdChangePct ?? NaN } : null;
+  return usdQuote(symbol);
+}
 
-  const premium = kimchiPremium(p.krwBtc, p.usdBtc, p.krwUsdt);
-  if (premium !== null) setText('kimchi-premium', formatSignedPct(premium), premium);
+function renderHeader() {
+  const symbol = selectedCoin();
+  if (symbol !== lastSymbol) {
+    lastSymbol = symbol;
+    lastPrice = 0; // 코인이 바뀌면 깜빡이지 않게
+  }
+  const t = latestTickers.get(`KRW-${symbol}`);
+  const usd = selectedUsd(symbol);
+
+  setText('price-label', `${symbol} / KRW`);
+  setText('usd-label', `${symbol} / USD`);
+  setText('kimchi-coin-label', symbol);
+  setText('range-coin-label', symbol);
+
+  const krwElem = document.getElementById('krw-btc-price');
+  if (krwElem) {
+    if (t) flashPrice(krwElem, t.trade_price);
+    krwElem.textContent = t ? formatKrwPrice(t.trade_price) : '-';
+  }
+  const change = t ? t.signed_change_rate * 100 : null;
+  setText('krw-change', change === null ? '-' : formatSignedPct(change), change);
+  setText('krw-high', t ? formatKrwPrice(t.high_price) : '-');
+  setText('krw-low', t ? formatKrwPrice(t.low_price) : '-');
+
+  setText('usd-btc-price', usd ? formatUsdPrice(usd.price) : symbol === 'USDT' ? '$1' : '바이낸스 없음');
+  const usdChange = usd && Number.isFinite(usd.changePct) ? usd.changePct : null;
+  setText('usd-change', usdChange === null ? '' : formatSignedPct(usdChange), usdChange);
+
+  const premium = t && usd ? coinKimchiPremium(t.trade_price, usd.price, prices.krwUsdt) : null;
+  setText('kimchi-premium', premium === null ? '-' : formatSignedPct(premium), premium);
+}
+
+let headerQueued = false;
+
+function queueHeader() {
+  if (headerQueued) return;
+  headerQueued = true;
+  requestAnimationFrame(() => {
+    headerQueued = false;
+    renderHeader();
+  });
 }
 
 export function initKrMarket() {
-  subscribePrices(render);
-  render(prices);
+  subscribePrices(() => { if (selectedCoin() === 'BTC') queueHeader(); });
+  onUsdQuote((symbol) => { if (symbol === selectedCoin()) queueHeader(); });
+  onSelectedCoinChange(renderHeader);
+  renderHeader();
   fetchUpbitOnce();
   connectUpbitWebSocket();
   refreshFearGreed();

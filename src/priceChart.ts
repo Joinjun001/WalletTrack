@@ -1,23 +1,38 @@
 /**
  * 업비트 원화 캔들 차트 (TradingView lightweight-charts). 과거 캔들은 REST, 현재 캔들은 실시간 시세로 갱신한다.
  * 업비트는 한 번에 200개까지만 주므로, 차트를 왼쪽 끝 가까이 옮기면 그 이전 200개를 이어서 받는다.
+ * 캔들 위에 큰 강제청산(바이낸스 선물, 그 코인)과 고래 거래소 입출금(비트코인만)을 표시한다 (기록 서버, 캔들 구간별 합계).
  */
 
-import { createChart, CandlestickSeries, HistogramSeries, ColorType } from 'lightweight-charts';
-import type { DeepPartial, IChartApi, ISeriesApi, TimeChartOptions, UTCTimestamp } from 'lightweight-charts';
+import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, ColorType } from 'lightweight-charts';
+import type { DeepPartial, IChartApi, ISeriesApi, ISeriesMarkersPluginApi, SeriesMarker, Time, TimeChartOptions, UTCTimestamp } from 'lightweight-charts';
 import { onUpbitTicker } from './krMarket.ts';
 import { coinName } from './coins.ts';
-import { applyTick, candleTimeOf, krwPricePrecision, KST_OFFSET_SEC } from './market.ts';
+import { applyTick, candleTimeOf, formatUsdShort, krwPricePrecision, KST_OFFSET_SEC, topByValue } from './market.ts';
 import type { Candle } from './market.ts';
 import { track } from './analytics.ts';
-import { getUpbit } from './historyApi.ts';
+import { getHistory, getUpbit } from './historyApi.ts';
+import type { LiquidationBucket, WhaleBucket } from './historyApi.ts';
 import { chartThemeOptions, marketColors, onMarketColorsChange, registerThemedChart } from './theme.ts';
+import { onSelectedCoinChange, selectedCoin } from './selectedCoin.ts';
 
 const UPBIT_CANDLES = 'https://api.upbit.com/v1/candles';
 const CANDLE_COUNT = 200;
 const REFRESH_MS = 60 * 1000; // 거래량 등 실시간으로 못 받는 값을 맞추기 위한 재조회
 const CANDLE_RETRY_MS = 5 * 1000;
 const LOAD_OLDER_MARGIN = 30; // 왼쪽 끝까지 이만큼 캔들이 남으면 이전 캔들을 미리 받는다
+
+// 차트 표시: 캔들 구간별 합계가 큰 것부터 몇 개만 (너무 많으면 캔들이 가려진다)
+const MARKERS_KEY = 'wallettrack.chartMarkers';
+const MAX_LIQ_MARKERS = 5;    // 롱·숏 각각
+const MIN_LIQ_USD = 20_000;
+const MAX_WHALE_MARKERS = 3;  // 입금·출금 각각
+const MIN_WHALE_BTC = 50;
+const MAX_MARKER_HOURS = 720; // 기록 서버가 받는 최대 기간
+// 고래 입출금 색은 고래 카드와 같게 고정 (상승·하락 색 설정과 무관)
+const WHALE_DEPOSIT_COLOR = '#FF5252';
+const WHALE_WITHDRAWAL_COLOR = '#00C853';
+type MarkerKind = 'liq' | 'whale';
 
 const INTERVALS: Record<string, { path: string; seconds: number }> = {
   '1m': { path: 'minutes/1', seconds: 60 },
@@ -38,7 +53,11 @@ interface UpbitCandle {
 let chart: IChartApi | null = null;
 let candleSeries: ISeriesApi<'Candlestick'> | null = null;
 let volumeSeries: ISeriesApi<'Histogram'> | null = null;
-let symbol = 'BTC';
+let seriesMarkers: ISeriesMarkersPluginApi<Time> | null = null;
+let markerKinds = loadMarkerKinds();
+let markerData: { key: string; liq: LiquidationBucket[]; whale: WhaleBucket[] } | null = null;
+let markerRequest = 0;
+let symbol = selectedCoin();
 let interval = '15m';
 let lastCandle: Candle | null = null;
 let pricePrecision = 0;
@@ -82,6 +101,98 @@ function recolor() {
   candleSeries.applyOptions(candleColors());
   const rising = new Map(candleSeries.data().map((c) => [c.time, 'close' in c && c.close >= c.open]));
   volumeSeries.setData(volumeSeries.data().map((v) => ({ ...v, color: volumeColor(rising.get(v.time) ?? true) })));
+  drawMarkers();
+}
+
+function loadMarkerKinds(): Set<MarkerKind> {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MARKERS_KEY) || 'null');
+    if (Array.isArray(saved)) return new Set(saved.filter((k): k is MarkerKind => k === 'liq' || k === 'whale'));
+  } catch {
+    // 저장된 값이 없거나 읽을 수 없으면 기본값
+  }
+  return new Set<MarkerKind>(['liq', 'whale']);
+}
+
+function saveMarkerKinds() {
+  try {
+    localStorage.setItem(MARKERS_KEY, JSON.stringify([...markerKinds]));
+  } catch {
+    // 시크릿 모드 등: 이번 방문 동안만 유지
+  }
+}
+
+/** 받아 둔 청산·고래 합계로 표시를 다시 그린다 (색 바뀜, 켜고 끄기) */
+function drawMarkers() {
+  if (!seriesMarkers || !candleSeries) return;
+  if (!markerData || markerData.key !== `${symbol}|${interval}`) {
+    seriesMarkers.setMarkers([]);
+    return;
+  }
+  const seconds = INTERVALS[interval].seconds;
+  const times = new Set(candleSeries.data().map((c) => c.time as number));
+  const { up, down } = marketColors();
+  const markers: SeriesMarker<Time>[] = [];
+  const add = (t: number, marker: Omit<SeriesMarker<Time>, 'time'>) => {
+    const time = candleTimeOf(t, seconds);
+    if (times.has(time)) markers.push({ ...marker, time: time as UTCTimestamp } as SeriesMarker<Time>);
+  };
+  if (markerKinds.has('liq')) {
+    // 롱 청산 = 강제 매도라 가격이 떨어질 때 나온다 → 캔들 아래, 하락 색
+    for (const b of topByValue(markerData.liq, (x) => x.longUsd, MAX_LIQ_MARKERS, MIN_LIQ_USD)) {
+      add(b.t, { position: 'belowBar', shape: 'circle', color: down, text: `롱 ${formatUsdShort(b.longUsd)}` });
+    }
+    for (const b of topByValue(markerData.liq, (x) => x.shortUsd, MAX_LIQ_MARKERS, MIN_LIQ_USD)) {
+      add(b.t, { position: 'aboveBar', shape: 'circle', color: up, text: `숏 ${formatUsdShort(b.shortUsd)}` });
+    }
+  }
+  if (markerKinds.has('whale') && symbol === 'BTC') {
+    const btc = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}₿`;
+    for (const b of topByValue(markerData.whale, (x) => x.depositBtc, MAX_WHALE_MARKERS, MIN_WHALE_BTC)) {
+      add(b.t, { position: 'aboveBar', shape: 'arrowDown', color: WHALE_DEPOSIT_COLOR, text: `입금 ${btc(b.depositBtc)}` });
+    }
+    for (const b of topByValue(markerData.whale, (x) => x.withdrawalBtc, MAX_WHALE_MARKERS, MIN_WHALE_BTC)) {
+      add(b.t, { position: 'belowBar', shape: 'arrowUp', color: WHALE_WITHDRAWAL_COLOR, text: `출금 ${btc(b.withdrawalBtc)}` });
+    }
+  }
+  seriesMarkers.setMarkers(markers.sort((a, b) => (a.time as number) - (b.time as number)));
+}
+
+/** 받아 둔 캔들 기간만큼 청산·고래 합계를 기록 서버에서 다시 받는다 */
+async function refreshMarkers() {
+  if (!candleSeries) return;
+  const first = candleSeries.data()[0];
+  const key = `${symbol}|${interval}`;
+  const wantLiq = markerKinds.has('liq');
+  const wantWhale = markerKinds.has('whale') && symbol === 'BTC';
+  if (!first || (!wantLiq && !wantWhale)) {
+    drawMarkers();
+    return;
+  }
+  const request = ++markerRequest;
+  const seconds = INTERVALS[interval].seconds;
+  const firstMs = ((first.time as number) - KST_OFFSET_SEC) * 1000;
+  const hours = Math.min(MAX_MARKER_HOURS, (Date.now() - firstMs) / 3_600_000 + seconds / 3600).toFixed(2);
+  const minutes = seconds / 60;
+  const [liq, whale] = await Promise.all([
+    wantLiq ? getHistory<LiquidationBucket[]>(`/liquidations/buckets?symbol=${encodeURIComponent(symbol)}USDT&hours=${hours}&minutes=${minutes}`) : null,
+    wantWhale ? getHistory<WhaleBucket[]>(`/whales/buckets?hours=${hours}&minutes=${minutes}`) : null
+  ]);
+  if (request !== markerRequest || key !== `${symbol}|${interval}`) return; // 그 사이 코인·간격이 바뀌었다
+  markerData = { key, liq: liq ?? [], whale: whale ?? [] };
+  drawMarkers();
+}
+
+function renderMarkerButtons() {
+  document.querySelectorAll<HTMLButtonElement>('.marker-btn').forEach((btn) => {
+    const kind = btn.dataset.marker as MarkerKind;
+    const whaleOff = kind === 'whale' && symbol !== 'BTC';
+    btn.disabled = whaleOff;
+    btn.title = whaleOff ? '고래 입출금은 비트코인 차트에서만 보여요' : btn.dataset.title || '';
+    const on = markerKinds.has(kind) && !whaleOff;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-pressed', String(on));
+  });
 }
 
 /** to: 이 시각(UTC, 미포함) 이전 캔들. 없으면 최신 캔들 */
@@ -114,6 +225,7 @@ async function loadCandles() {
   lastCandle = candles[candles.length - 1];
   oldestUtc = list[0].candle_date_time_utc;
   noMoreOlder = list.length < CANDLE_COUNT;
+  refreshMarkers();
 }
 
 /** 지금 받아 둔 것보다 이전 캔들 200개를 앞에 붙인다 */
@@ -133,6 +245,7 @@ async function loadOlderCandles() {
     candleSeries.setData([...keep.map(([c]) => ({ ...c, time: c.time as UTCTimestamp })), ...candleSeries.data()]);
     volumeSeries.setData([...keep.map(([c, raw]) => volumeBar(raw, c.time)), ...volumeSeries.data()]);
     oldestUtc = list[0].candle_date_time_utc;
+    refreshMarkers();
     track('chart_load_older', { interval, symbol });
   } finally {
     loadingOlder = false;
@@ -141,6 +254,8 @@ async function loadOlderCandles() {
 
 /** 코인이나 간격이 바뀌면 처음부터 다시 받는다 */
 function resetCandles() {
+  markerData = null;
+  drawMarkers();
   lastCandle = null;
   oldestUtc = null;
   noMoreOlder = false;
@@ -189,11 +304,12 @@ function renderTitle() {
   if (title) title.textContent = `${coinName(symbol)} ${symbol}/KRW`;
 }
 
-/** 코인 시세 표에서 행을 누르면 호출 */
-export function selectChartCoin(next: string) {
+/** 사이드바·급등 피드에서 코인을 고르면 */
+function selectChartCoin(next: string) {
   if (next === symbol) return;
   symbol = next;
   renderTitle();
+  renderMarkerButtons();
   resetCandles();
 }
 
@@ -214,6 +330,7 @@ export function initPriceChart() {
   candleSeries = chart.addSeries(CandlestickSeries, { ...candleColors(), borderVisible: false });
   volumeSeries = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: '' });
   volumeSeries.priceScale().applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+  seriesMarkers = createSeriesMarkers(candleSeries, []);
 
   onMarketColorsChange(recolor);
 
@@ -232,11 +349,29 @@ export function initPriceChart() {
     });
   });
 
+  document.querySelectorAll<HTMLButtonElement>('.marker-btn').forEach((btn) => {
+    btn.dataset.title = btn.title;
+    btn.addEventListener('click', () => {
+      const kind = btn.dataset.marker as MarkerKind;
+      if (markerKinds.has(kind)) markerKinds.delete(kind);
+      else markerKinds.add(kind);
+      saveMarkerKinds();
+      renderMarkerButtons();
+      refreshMarkers();
+      track('chart_markers', { kind, on: markerKinds.has(kind) });
+    });
+  });
+  renderMarkerButtons();
+  onSelectedCoinChange(selectChartCoin);
+
   onUpbitTicker((market, t) => {
     if (market === `KRW-${symbol}`) applyLivePrice(t.trade_price, t.trade_timestamp || Date.now());
   });
 
   renderTitle();
   loadCandles();
-  setInterval(refreshLatestCandle, REFRESH_MS);
+  setInterval(() => {
+    refreshLatestCandle();
+    refreshMarkers();
+  }, REFRESH_MS);
 }

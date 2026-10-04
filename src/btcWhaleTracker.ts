@@ -132,17 +132,6 @@ function connectPriceWebSocket() {
   }
 }
 
-function renderUsdPrice() {
-  const priceElem = document.getElementById('usd-btc-price');
-  if (priceElem && prices.usdBtc > 0) priceElem.textContent = formatUsd(prices.usdBtc, true);
-  const changeElem = document.getElementById('usd-change');
-  if (changeElem && prices.usdChangePct !== null) {
-    changeElem.textContent = formatSignedPct(prices.usdChangePct);
-    changeElem.classList.toggle('up', prices.usdChangePct > 0);
-    changeElem.classList.toggle('down', prices.usdChangePct < 0);
-  }
-}
-
 /**
  * Initialize Dashboard Engine
  */
@@ -152,12 +141,11 @@ export async function initLiveStreamDashboard() {
   const totalVolElem = document.getElementById('live-total-vol');
 
   // Fetch initial BTC Price
+  // 상단 시세 바 표시는 krMarket.ts가 맡는다 (고른 코인 기준)
   await fetchBtcPrice();
-  renderUsdPrice();
 
   // Connect Real-Time Price Stream WebSocket
   connectPriceWebSocket();
-  setInterval(renderUsdPrice, 1000); // 틱마다 다시 그리지 않고 1초 단위로 표시
 
   // Periodic REST fallback every 20s if WebSocket disconnected
   setInterval(() => {
@@ -165,9 +153,9 @@ export async function initLiveStreamDashboard() {
   }, 20000);
 
   // Filter Buttons
-  document.querySelectorAll('.threshold-btn').forEach(btn => {
+  document.querySelectorAll('.threshold-btn[data-threshold]').forEach(btn => {
     btn.addEventListener('click', (e) => {
-      document.querySelectorAll('.threshold-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.threshold-btn[data-threshold]').forEach(b => b.classList.remove('active'));
       const target = e.currentTarget as HTMLElement;
       target.classList.add('active');
       minBtcThreshold = parseFloat(target.dataset.threshold || '0.1');

@@ -7,6 +7,8 @@
  * GET /api/liquidations/summary?hours=24
  * GET /api/liquidations/by-symbol?hours=24&limit=10
  * GET /api/whales/flow?hours=24
+ * GET /api/liquidations/buckets?symbol=BTCUSDT&hours=50&minutes=15   캔들 구간별 롱·숏 청산 합계 (차트 표시)
+ * GET /api/whales/buckets?hours=50&minutes=15&minBtc=1               캔들 구간별 거래소 입금·출금 합계 (차트 표시)
  * GET /api/futures?symbol=BTCUSDT&hours=24
  * GET /api/kimchi?symbol=BTC&hours=24
  * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...], /api/upbit/tickers, /api/upbit/markets: 업비트 중계 (upbitProxy.ts)
@@ -138,6 +140,32 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
       withdrawalCount: by('withdrawal')?.count ?? 0,
       transferCount: by('transfer')?.count ?? 0
     };
+  },
+
+  // 구간은 'epoch' 기준이라 업비트 분봉·일봉(UTC 0시 = KST 9시) 경계와 맞는다
+  '/api/liquidations/buckets': async (q) => {
+    const rows = await query<{ t: Date; long_usd: number; short_usd: number }>(
+      `SELECT date_bin($3::int * interval '1 minute', occurred_at, 'epoch') AS t,
+              coalesce(sum(usd_value) FILTER (WHERE position = 'long'), 0) AS long_usd,
+              coalesce(sum(usd_value) FILTER (WHERE position = 'short'), 0) AS short_usd
+       FROM liquidations WHERE symbol = $1 AND occurred_at > now() - $2::float8 * interval '1 hour'
+       GROUP BY t ORDER BY t`,
+      [symbolParam(q, 'BTCUSDT'), numParam(q, 'hours', 24, 0.1, 24 * 30), Math.round(numParam(q, 'minutes', 15, 1, 1440))]
+    );
+    return rows.map((r) => ({ t: ms(r.t), longUsd: r.long_usd, shortUsd: r.short_usd }));
+  },
+
+  '/api/whales/buckets': async (q) => {
+    const rows = await query<{ t: Date; deposit_btc: number; withdrawal_btc: number }>(
+      `SELECT date_bin($2::int * interval '1 minute', detected_at, 'epoch') AS t,
+              coalesce(sum(btc_amount) FILTER (WHERE direction = 'deposit'), 0) AS deposit_btc,
+              coalesce(sum(btc_amount) FILTER (WHERE direction = 'withdrawal'), 0) AS withdrawal_btc
+       FROM whale_txs WHERE direction IN ('deposit', 'withdrawal') AND btc_amount >= $3
+         AND detected_at > now() - $1::float8 * interval '1 hour'
+       GROUP BY t ORDER BY t`,
+      [numParam(q, 'hours', 24, 0.1, 24 * 30), Math.round(numParam(q, 'minutes', 15, 1, 1440)), numParam(q, 'minBtc', 1, 0, 1e6)]
+    );
+    return rows.map((r) => ({ t: ms(r.t), depositBtc: r.deposit_btc, withdrawalBtc: r.withdrawal_btc }));
   },
 
   '/api/futures': async (q) => {

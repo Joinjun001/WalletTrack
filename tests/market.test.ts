@@ -4,8 +4,9 @@ import {
   kimchiPremium, formatKrw, formatKrwShort, formatSignedPct, halvingInfo, fearGreedLabelKo, timeAgoKo,
   formatKrwPrice, formatUsdShort, formatFundingRate, formatCountdown, liquidatedPosition,
   candleTimeOf, applyTick, KST_OFFSET_SEC, alertDirection, isAlertTriggered, isThresholdCrossed,
-  topMovers, formatDurationKo
+  topMovers, formatDurationKo, pushPriceBucket, detectSurge, topByValue, coinKimchiPremium, formatUsdPrice
 } from '../src/market.ts';
+import type { PriceBucket } from '../src/market.ts';
 
 test('kimchiPremium compares KRW price with USD price x USDT rate', () => {
   // 1 BTC = $100,000, 1 USDT = 1,400원 -> 1.4억원이면 0%, 1.428억원이면 +2%
@@ -113,4 +114,46 @@ test('formatDurationKo', () => {
   assert.equal(formatDurationKo(5 * 3600_000 + 20 * 60_000), '5시간 20분');
   assert.equal(formatDurationKo(12 * 60_000), '12분');
   assert.equal(formatDurationKo(-1), '0분');
+});
+
+test('price buckets keep low/high per bucket and drop old ones', () => {
+  const b: PriceBucket[] = [];
+  pushPriceBucket(b, 100, 0, 10_000, 60_000);
+  pushPriceBucket(b, 90, 5_000, 10_000, 60_000);
+  pushPriceBucket(b, 110, 15_000, 10_000, 60_000);
+  assert.deepEqual(b, [{ t: 0, lo: 90, hi: 100 }, { t: 10_000, lo: 110, hi: 110 }]);
+  pushPriceBucket(b, 120, 75_000, 10_000, 60_000);
+  assert.deepEqual(b.map((x) => x.t), [70_000]);
+  pushPriceBucket(b, 0, 80_000, 10_000, 60_000); // 잘못된 가격은 무시
+  assert.equal(b.length, 1);
+});
+
+test('detectSurge compares the price with the window low/high', () => {
+  const b: PriceBucket[] = [{ t: 0, lo: 100, hi: 101 }, { t: 10_000, lo: 101, hi: 102 }];
+  assert.equal(detectSurge(b, 102, 3), null);
+  const up = detectSurge(b, 104, 3)!;
+  assert.equal(up.direction, 'up');
+  assert.equal(up.from, 100);
+  assert.ok(Math.abs(up.pct - 4) < 1e-9);
+  const down = detectSurge(b, 98, 3)!;
+  assert.equal(down.direction, 'down');
+  assert.equal(down.from, 102);
+  assert.equal(detectSurge([], 100, 3), null);
+});
+
+test('topByValue keeps the n largest above the floor in original order', () => {
+  const list = [{ t: 1, v: 5 }, { t: 2, v: 50 }, { t: 3, v: 20 }, { t: 4, v: 30 }];
+  assert.deepEqual(topByValue(list, (x) => x.v, 2, 10).map((x) => x.t), [2, 4]);
+  assert.deepEqual(topByValue(list, (x) => x.v, 10, 25).map((x) => x.t), [2, 4]);
+});
+
+test('coinKimchiPremium hides absurd gaps (same ticker, different coin)', () => {
+  assert.equal(coinKimchiPremium(1400, 1, 1400), 0);
+  assert.equal(coinKimchiPremium(14000, 1, 1400), null);
+});
+
+test('formatUsdPrice keeps small coin prices readable', () => {
+  assert.equal(formatUsdPrice(84746), '$84,746.00');
+  assert.equal(formatUsdPrice(0.5123), '$0.5123');
+  assert.equal(formatUsdPrice(0.00001234), '$0.00001234');
 });
