@@ -350,7 +350,7 @@
           <p class="tool-note">이 페이지가 열려 있을 때만, 10초에 한 번까지 알려요</p>
         </div>
 
-        <div class="info-card glass-panel tool-card">
+        <div class="info-card glass-panel tool-card sound-card">
           <h2 class="info-title">🔊 사운드 알림 <span class="info-unit">바이낸스 선물</span></h2>
           <label class="calc-row whale-alert-row">
             <span>청산</span>
@@ -372,7 +372,19 @@
               <option value="5000000">BTC $5M 이상</option>
             </select>
           </label>
-          <button id="sound-alert-test" type="button" class="alert-add-btn sound-test-btn">미리 듣기</button>
+          <label class="calc-row whale-alert-row">
+            <span>청산음</span>
+            <select id="liq-sound-style" aria-label="청산 소리 종류"></select>
+          </label>
+          <label class="calc-row whale-alert-row">
+            <span>체결음</span>
+            <select id="trade-sound-style" aria-label="체결 소리 종류"></select>
+          </label>
+          <label class="calc-row">
+            <span>볼륨</span>
+            <input id="sound-volume" type="range" min="0" max="100" step="5" value="70" aria-label="사운드 볼륨">
+          </label>
+          <button id="sound-alert-test" type="button" class="alert-add-btn sound-test-btn">청산 단계별 미리 듣기</button>
           <p id="sound-alert-note" class="tool-note"></p>
         </div>
       </aside>

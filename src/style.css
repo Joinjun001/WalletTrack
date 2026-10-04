@@ -246,7 +246,7 @@ body {
 /* Dashboard layout: 피드 + 사이드 패널 */
 .dashboard {
   display: grid;
-  grid-template-columns: 250px minmax(0, 1fr) 300px;
+  grid-template-columns: 310px minmax(0, 1fr) 300px;
   gap: 1.5rem;
   align-items: start;
 }
@@ -987,6 +987,8 @@ body {
 .whale-alert-row select:focus { outline: none; border-color: var(--btc-gold); }
 
 .sound-test-btn { width: 100%; margin-top: 0.25rem; }
+.sound-card .calc-row { grid-template-columns: 3rem 1fr; }
+.sound-card input[type="range"] { padding: 0; border: none; background: none; accent-color: var(--btc-gold); }
 
 /* 처음 들어왔을 때 사운드 알림을 켤지 묻는 안내 (화면 아래) */
 .sound-prompt {
@@ -1244,8 +1246,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.45rem 0.5rem;
+  gap: 0.6rem;
+  padding: 0.55rem 0.6rem;
   border-radius: 8px;
   cursor: pointer;
 }
@@ -1257,15 +1259,15 @@ body {
 .mini-candle {
   position: relative;
   flex-shrink: 0;
-  width: 7px;
-  height: 30px;
+  width: 8px;
+  height: 34px;
   border-radius: 2px;
   background: var(--line-faint);
 }
 
 .mini-candle i { position: absolute; display: block; }
-.mini-candle .mc-wick { left: 3px; width: 1px; }
-.mini-candle .mc-body { left: 0; width: 7px; border-radius: 1px; }
+.mini-candle .mc-wick { left: 3.5px; width: 1px; }
+.mini-candle .mc-body { left: 0; width: 8px; border-radius: 1px; }
 .mini-candle.up i { background: var(--up); }
 .mini-candle.down i { background: var(--down); }
 
@@ -1277,7 +1279,7 @@ body {
 }
 
 .coin-row-name strong {
-  font-size: 0.84rem;
+  font-size: 0.92rem;
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -1285,7 +1287,7 @@ body {
 }
 
 .coin-row-name span, .coin-row-sub {
-  font-size: 0.7rem;
+  font-size: 0.74rem;
   color: var(--text-muted);
 }
 
@@ -1297,7 +1299,7 @@ body {
   font-family: var(--font-mono);
 }
 
-.coin-row-price { font-size: 0.8rem; font-weight: 700; }
+.coin-row-price { font-size: 0.88rem; font-weight: 700; }
 .coin-row-sub { font-family: var(--font-mono); white-space: nowrap; }
 .coin-list-empty { padding: 1rem 0.5rem; font-size: 0.82rem; color: var(--text-muted); }
 
@@ -1411,10 +1413,15 @@ body {
   .marker-group { margin-left: 0; }
 }
 
+/* 1440보다 좁은 데스크톱: 차트 폭을 지키려고 사이드바를 조금 줄인다 */
+@media (max-width: 1360px) {
+  .dashboard { grid-template-columns: 270px minmax(0, 1fr) 280px; }
+}
+
 @media (max-width: 1200px) {
   .dashboard { grid-template-columns: minmax(0, 1fr) 300px; }
   /* 사이드바를 위쪽 한 줄 전체로 (높이 제한) */
-  .coin-sidebar { grid-column: 1 / -1; position: static; height: 300px; }
+  .coin-sidebar { grid-column: 1 / -1; position: static; height: 360px; }
 }
 
 @media (max-width: 960px) {

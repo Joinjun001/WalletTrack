@@ -227,3 +227,22 @@ export function formatUsdPrice(price: number): string {
   const digits = price >= 1 ? 2 : price >= 0.01 ? 4 : Math.min(10, 3 - Math.floor(Math.log10(price)));
   return `$${price.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
 }
+
+export type SoundTier = 1 | 2 | 3 | 4;
+
+/** 청산 금액(달러)별 소리 단계: $100K 미만 1, $500K 미만 2, $2M 미만 3, 그 이상 4 (기준 금액과 무관하게 큰 청산은 크게) */
+export function liquidationSoundTier(usd: number): SoundTier {
+  if (usd >= 2_000_000) return 4;
+  if (usd >= 500_000) return 3;
+  if (usd >= 100_000) return 2;
+  return 1;
+}
+
+/** 대량 체결은 고른 기준 대비 배수로: 1배 1, 3배 2, 10배 3, 30배 이상 4 */
+export function tradeSoundTier(usd: number, threshold: number): SoundTier {
+  const ratio = threshold > 0 ? usd / threshold : 1;
+  if (ratio >= 30) return 4;
+  if (ratio >= 10) return 3;
+  if (ratio >= 3) return 2;
+  return 1;
+}

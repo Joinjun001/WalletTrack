@@ -4,7 +4,7 @@ import {
   kimchiPremium, formatKrw, formatKrwShort, formatSignedPct, halvingInfo, fearGreedLabelKo, timeAgoKo,
   formatKrwPrice, formatUsdShort, formatFundingRate, formatCountdown, liquidatedPosition,
   candleTimeOf, applyTick, KST_OFFSET_SEC, alertDirection, isAlertTriggered, isThresholdCrossed,
-  topMovers, formatDurationKo, pushPriceBucket, detectSurge, topByValue, coinKimchiPremium, formatUsdPrice
+  topMovers, formatDurationKo, pushPriceBucket, detectSurge, topByValue, coinKimchiPremium, formatUsdPrice, liquidationSoundTier, tradeSoundTier
 } from '../src/market.ts';
 import type { PriceBucket } from '../src/market.ts';
 
@@ -156,4 +156,15 @@ test('formatUsdPrice keeps small coin prices readable', () => {
   assert.equal(formatUsdPrice(84746), '$84,746.00');
   assert.equal(formatUsdPrice(0.5123), '$0.5123');
   assert.equal(formatUsdPrice(0.00001234), '$0.00001234');
+});
+
+test('sound tiers grow with liquidation size and trade ratio', () => {
+  assert.equal(liquidationSoundTier(50_000), 1);
+  assert.equal(liquidationSoundTier(100_000), 2);
+  assert.equal(liquidationSoundTier(700_000), 3);
+  assert.equal(liquidationSoundTier(2_000_000), 4);
+  assert.equal(tradeSoundTier(1_000_000, 1_000_000), 1);
+  assert.equal(tradeSoundTier(3_000_000, 1_000_000), 2);
+  assert.equal(tradeSoundTier(10_000_000, 1_000_000), 3);
+  assert.equal(tradeSoundTier(50_000_000, 1_000_000), 4);
 });
