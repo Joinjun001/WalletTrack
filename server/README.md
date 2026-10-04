@@ -10,14 +10,14 @@ mempool.space / 바이낸스 / 업비트
 
 | 서비스 | 하는 일 |
 |---|---|
-| `collector` | 고래 거래(≥0.1 BTC), 바이낸스 선물 강제청산, 선물 지표(5분), 코인별 김프(1분) 저장, 180일 지난 기록 삭제 |
+| `collector` | 고래 거래(≥0.1 BTC), 바이낸스 선물 강제청산, 선물 지표(5분), 코인별 김프(1분), 업비트 원화 마켓 급등·급락(실시간 시세 WebSocket) 저장, 180일 지난 기록 삭제 |
 | `api` | 기록 조회 REST API (읽기 전용) |
 | `db` | PostgreSQL 17 (외부 포트 없음) |
 | `caddy` | (선택, `--profile caddy`) 80/443을 쓰는 웹 서버가 없을 때 HTTPS 처리 |
 
 현재 운영 서버(OCI 오사카, `bittrack.duckdns.org`)에는 다른 사이트용 nginx가 이미 80 포트를 쓰고 있으므로 **nginx 방식**을 쓴다.
 
-거래 분석·김프 계산은 웹과 같은 코드(`../src/txAnalysis.ts`, `../src/market.ts`)를 쓴다.
+거래 분석·김프 계산·급등·급락 판정은 웹과 같은 코드(`../src/txAnalysis.ts`, `../src/market.ts`, `../src/surge.ts`)를 쓴다.
 
 ## API
 
@@ -25,10 +25,11 @@ mempool.space / 바이낸스 / 업비트
 |---|---|
 | `GET /api/health` | 테이블별 마지막 저장 시각 (수집이 멈췄는지 확인용) |
 | `GET /api/whales?hours=24&minBtc=0.1&limit=300` | 고래 거래, 최신순 |
-| `GET /api/liquidations?hours=24&minUsd=1000&limit=40` | 강제청산, 최신순 |
-| `GET /api/liquidations/summary?hours=24` | 롱/숏 청산 합계 |
+| `GET /api/liquidations?hours=24&minUsd=1000&limit=40[&symbol=BTCUSDT]` | 강제청산, 최신순 (symbol을 주면 그 종목만) |
+| `GET /api/liquidations/summary?hours=24[&symbol=BTCUSDT]` | 롱/숏 청산 합계 (symbol을 주면 그 종목만) |
 | `GET /api/futures?symbol=BTCUSDT&hours=24` | 펀딩비·미결제약정·롱 비율 추이 |
 | `GET /api/kimchi?symbol=BTC&hours=24` | 김프 추이 |
+| `GET /api/surges?threshold=3&hours=24&limit=50` | 업비트 원화 마켓 급등·급락 기록, 최신순 (threshold = 2·3·5·10%) |
 | `GET /api/liquidations/by-symbol?hours=24&limit=10` | 코인별 청산 합계 순위 |
 | `GET /api/whales/flow?hours=24` | 고래 거래 입금·출금·전송 합계 |
 | `GET /api/liquidations/buckets?symbol=BTCUSDT&hours=50&minutes=15` | 캔들 구간별 롱·숏 청산 합계 (가격 차트 표시) |

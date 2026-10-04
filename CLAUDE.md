@@ -10,7 +10,7 @@
 | 웹 (Vite + TS, 프레임워크 없음) | `index.html`, `src/` | `main`에 푸시하면 Vercel이 자동 배포 (https://wallet-track-theta.vercel.app) |
 | 수집기·기록 API·업비트 중계 | `server/` | 이 서버(OCI)에서 `cd server && docker compose up -d --build api` (수집기를 바꿨으면 `collector`도) |
 
-- 서버는 웹의 `src/txAnalysis.ts`, `src/market.ts`, `src/coins.ts`를 같이 쓴다. 서버가 다른 `src/` 파일을 쓰게 되면 `server/Dockerfile`의 `COPY`에도 추가한다.
+- 서버는 웹의 `src/txAnalysis.ts`, `src/market.ts`, `src/coins.ts`, `src/surge.ts`를 같이 쓴다. 서버가 다른 `src/` 파일을 쓰게 되면 `server/Dockerfile`의 `COPY`에도 추가한다.
 - **업비트 REST(시세·캔들·마켓 목록)는 브라우저에서 직접 부르지 않는다.** 업비트가 출처(Origin)별로 막아서 429가 난다. `historyApi.ts`의 `getUpbit()`로 서버 중계(`/api/upbit/...`)를 거친다. 업비트 WebSocket은 직접 써도 된다.
 - 기록 추이·청산 통계·거래소 흐름은 **서버 DB에 쌓인 만큼만** 보인다. 기간이 짧게 보이면 `server/src/backfill.ts`로 거래소 과거 데이터를 채울 수 있는지 본다.
 

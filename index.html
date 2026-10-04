@@ -180,9 +180,9 @@
             </div>
           </div>
           <div class="glass-panel liq-card">
-            <h2 class="info-title">🚀 급등·급락 포착 <span class="info-unit">업비트 원화 마켓 전체 · 누르면 차트로</span></h2>
+            <h2 class="info-title">🚀 급등·급락 포착 <span class="info-unit">업비트 원화 마켓 전체 · 최근 24시간 + 실시간 · 누르면 차트로</span></h2>
             <ul id="surge-feed" class="liq-feed surge-feed">
-              <li class="liq-empty">5분 안에 ±3% 이상 움직인 코인을 실시간으로 잡아요. 페이지를 연 뒤부터 모아요.</li>
+              <li class="liq-empty">지난 기록을 불러오는 중...</li>
             </ul>
           </div>
         </div>
@@ -209,7 +209,11 @@
 
           <div class="glass-panel liq-card card-gap">
             <div class="liq-head">
-              <h2 class="info-title" data-help="liquidations">🔥 실시간 강제청산 <span class="info-unit">바이낸스 선물 전체 · $1K 이상</span></h2>
+              <h2 class="info-title" data-help="liquidations">🔥 실시간 강제청산 <span id="liq-feed-unit" class="info-unit">BTC · 바이낸스·바이비트·OKX · $1K 이상</span></h2>
+              <div class="interval-group liq-mode" role="group" aria-label="청산 보기">
+                <button type="button" class="interval-btn liq-mode-btn active" data-mode="btc" aria-pressed="true">BTC</button>
+                <button type="button" class="interval-btn liq-mode-btn" data-mode="all" aria-pressed="false">전체 코인</button>
+              </div>
               <div class="liq-totals">
                 <span>롱 청산 <strong id="liq-long-total" class="down">$0</strong></span>
                 <span>숏 청산 <strong id="liq-short-total" class="up">$0</strong></span>
@@ -221,7 +225,7 @@
             </ul>
           </div>
           <div class="glass-panel liq-card card-gap">
-            <h2 class="info-title" data-help="liqStats">📊 청산 통계 <span class="info-unit">서버 기록 · 1분마다 갱신</span></h2>
+            <h2 class="info-title" data-help="liqStats">📊 청산 통계 <span id="liq-stats-unit" class="info-unit">바이낸스 BTCUSDT · 1분마다 갱신</span></h2>
             <p id="liq-stats-status" class="table-note" hidden>기록 서버에 연결할 수 없어요</p>
             <div class="liq-stats-grid">
               <table class="coin-table static-table">

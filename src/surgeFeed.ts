@@ -1,29 +1,40 @@
 /**
- * 급등·급락 포착: 업비트 원화 마켓 전체 실시간 시세에서 최근 5분 최저가보다 기준(%) 이상 오르거나
- * 최고가보다 그만큼 내린 코인을 피드에 올린다. 페이지를 연 뒤부터 모은다 (서버 기록 없음).
- * 같은 코인·방향은 10분 동안 다시 올리지 않는다 (그 사이 기준만큼 더 움직이면 다시 올린다).
+ * 급등·급락 포착: 업비트 원화 마켓 전체에서 5분 안에 기준(%) 이상 움직인 코인 (판정은 src/surge.ts).
+ * 처음 열 때와 기준을 바꿀 때 서버 기록(지난 24시간)을 불러오고, 이후는 브라우저가 실시간 시세로 바로 잡아 위에 쌓는다.
+ * 서버 수집기도 같은 판정을 하므로, 서버 기록과 같은 급등(같은 코인·방향, 10분 안)은 한 번만 보여 준다.
+ * 서버가 응답하지 않으면 페이지를 연 뒤부터만 보여 준다.
  */
 
 import { onUpbitTicker } from './krMarket.ts';
 import { coinName } from './coins.ts';
-import { detectSurge, formatKrwPrice, formatKrwShort, formatSignedPct, pushPriceBucket } from './market.ts';
-import type { PriceBucket } from './market.ts';
+import { formatKrwPrice, formatKrwShort, formatSignedPct } from './market.ts';
+import { SurgeDetector, SURGE_COOLDOWN_MS, SURGE_THRESHOLDS } from './surge.ts';
+import type { SurgeEvent } from './surge.ts';
+import { getHistory } from './historyApi.ts';
+import type { SurgeRecord } from './historyApi.ts';
 import { setSelectedCoin } from './selectedCoin.ts';
 import { showToast } from './tools.ts';
 import { escapeHtml } from './txAnalysis.ts';
 import { track } from './analytics.ts';
 
-const BUCKET_MS = 10_000;
-const WINDOW_MS = 5 * 60_000;
-const COOLDOWN_MS = 10 * 60_000;
-const MIN_VOLUME_KRW = 5e8; // 24시간 거래대금 5억원 미만은 조금만 사고팔아도 튀어서 뺀다
+const HISTORY_HOURS = 24;
 const MAX_ITEMS = 50;
-const THRESHOLDS = [2, 3, 5, 10];
 const THRESHOLD_KEY = 'wallettrack.surgeThreshold';
 const TOAST_KEY = 'wallettrack.surgeToast';
 
-const buckets = new Map<string, PriceBucket[]>();
-const lastFired = new Map<string, { at: number; pct: number }>(); // "KRW-ETH|up"
+interface Item {
+  market: string;
+  direction: 'up' | 'down';
+  pct: number;
+  price: number;
+  volumeKrw: number;
+  at: number;
+}
+
+const live = new Map<number, Item[]>(SURGE_THRESHOLDS.map((t) => [t, []])); // 기준별 실시간 감지 (최신이 앞)
+let history: Item[] = [];        // 지금 기준의 서버 기록 (최신이 앞)
+let historyState: 'loading' | 'ok' | 'failed' = 'loading';
+let historyRequest = 0;
 let threshold = 3;
 let toastOn = false;
 let unseen = 0;
@@ -56,56 +67,76 @@ function renderBadge() {
   badge.textContent = unseen > 99 ? '99+' : String(unseen);
 }
 
-function emptyText(): string {
-  return `5분 안에 ±${threshold}% 이상 움직인 코인을 실시간으로 잡아요. 페이지를 연 뒤부터 모아요.`;
+/** 서버 기록에 이미 있는 급등이면 (같은 코인·방향, 쿨다운 안) 실시간 감지를 다시 보여 주지 않는다 */
+function inHistory(item: Item): boolean {
+  return history.some((h) => h.market === item.market && h.direction === item.direction && Math.abs(h.at - item.at) < SURGE_COOLDOWN_MS);
 }
 
-function prependItem(symbol: string, direction: 'up' | 'down', pct: number, price: number, volume: number) {
+function merged(): Item[] {
+  const fresh = (live.get(threshold) ?? []).filter((i) => !inHistory(i));
+  return [...fresh, ...history].sort((a, b) => b.at - a.at).slice(0, MAX_ITEMS);
+}
+
+/** 오늘이면 시각만, 아니면 날짜도 */
+function timeLabel(at: number): string {
+  const date = new Date(at);
+  const time = date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  return date.toDateString() === new Date().toDateString() ? time : `${date.getMonth() + 1}/${date.getDate()} ${time.slice(0, 5)}`;
+}
+
+function itemHtml(i: Item): string {
+  const symbol = i.market.slice(4);
+  const name = coinName(symbol);
+  return `
+    <li class="surge-item ${i.direction}" data-symbol="${escapeHtml(symbol)}" tabindex="0" role="button" aria-label="${escapeHtml(name)} 차트 보기">
+      <span class="surge-side">${i.direction === 'up' ? '🚀 급등' : '📉 급락'}</span>
+      <span class="surge-name"><strong>${escapeHtml(name)}</strong> <span>${escapeHtml(symbol)}</span></span>
+      <span class="surge-pct">${formatSignedPct(i.pct)}</span>
+      <span class="surge-price">${formatKrwPrice(i.price)} <span class="surge-vol">· ${formatKrwShort(i.volumeKrw)}</span></span>
+      <span class="liq-time">${timeLabel(i.at)}</span>
+    </li>`;
+}
+
+function emptyText(): string {
+  if (historyState === 'loading') return '지난 기록을 불러오는 중...';
+  const since = historyState === 'ok' ? `최근 ${HISTORY_HOURS}시간 동안 없었어요. ` : '기록 서버에 연결할 수 없어 페이지를 연 뒤부터 모아요. ';
+  return `5분 안에 ±${threshold}% 이상 움직인 코인이 ${since}새로 잡히면 바로 보여 드려요.`;
+}
+
+function renderList() {
   const list = document.getElementById('surge-feed');
   if (!list) return;
-  list.querySelector('.liq-empty')?.remove();
-  const name = coinName(symbol);
-  const time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  const item = document.createElement('li');
-  item.className = `surge-item ${direction}`;
-  item.dataset.symbol = symbol;
-  item.tabIndex = 0;
-  item.setAttribute('role', 'button');
-  item.setAttribute('aria-label', `${name} 차트 보기`);
-  item.innerHTML = `
-    <span class="surge-side">${direction === 'up' ? '🚀 급등' : '📉 급락'}</span>
-    <span class="surge-name"><strong>${escapeHtml(name)}</strong> <span>${escapeHtml(symbol)}</span></span>
-    <span class="surge-pct">${formatSignedPct(pct)}</span>
-    <span class="surge-price">${formatKrwPrice(price)} <span class="surge-vol">· ${formatKrwShort(volume)}</span></span>
-    <span class="liq-time">${time}</span>`;
-  list.prepend(item);
-  while (list.children.length > MAX_ITEMS) list.lastElementChild?.remove();
+  const items = merged();
+  list.innerHTML = items.length ? items.map(itemHtml).join('') : `<li class="liq-empty">${emptyText()}</li>`;
+}
 
+async function loadHistory() {
+  const request = ++historyRequest;
+  historyState = 'loading';
+  history = [];
+  renderList();
+  const records = await getHistory<SurgeRecord[]>(`/surges?threshold=${threshold}&hours=${HISTORY_HOURS}&limit=${MAX_ITEMS}`);
+  if (request !== historyRequest) return; // 그 사이 기준을 또 바꿨다
+  historyState = records ? 'ok' : 'failed';
+  history = (records ?? []).map((r) => ({ market: r.market, direction: r.direction, pct: r.pct, price: r.price, volumeKrw: r.volumeKrw, at: r.detectedAt }));
+  renderList();
+}
+
+function onSurge(e: SurgeEvent) {
+  const item: Item = { market: e.market, direction: e.direction, pct: e.pct, price: e.price, volumeKrw: e.volumeKrw, at: e.at };
+  const list = live.get(e.threshold);
+  if (!list) return;
+  list.unshift(item);
+  if (list.length > MAX_ITEMS) list.length = MAX_ITEMS;
+  if (e.threshold !== threshold || inHistory(item)) return;
+
+  renderList();
   if (!panelVisible()) {
     unseen++;
     renderBadge();
   }
-  if (toastOn) showToast(`${direction === 'up' ? '🚀' : '📉'} ${name}(${symbol}) 5분 ${formatSignedPct(pct)} ${direction === 'up' ? '급등' : '급락'}`);
-}
-
-function onTicker(market: string, price: number, volume24h: number) {
-  if (!market.startsWith('KRW-') || market === 'KRW-USDT') return;
-  const now = Date.now();
-  let list = buckets.get(market);
-  if (!list) {
-    list = [];
-    buckets.set(market, list);
-  }
-  pushPriceBucket(list, price, now, BUCKET_MS, WINDOW_MS);
-  if (volume24h < MIN_VOLUME_KRW) return;
-
-  const surge = detectSurge(list, price, threshold);
-  if (!surge) return;
-  const key = `${market}|${surge.direction}`;
-  const prev = lastFired.get(key);
-  if (prev && now - prev.at < COOLDOWN_MS && Math.abs(surge.pct) < Math.abs(prev.pct) + threshold) return;
-  lastFired.set(key, { at: now, pct: surge.pct });
-  prependItem(market.slice(4), surge.direction, surge.pct, price, volume24h);
+  const symbol = e.market.slice(4);
+  if (toastOn) showToast(`${e.direction === 'up' ? '🚀' : '📉'} ${coinName(symbol)}(${symbol}) 5분 ${formatSignedPct(e.pct)} ${e.direction === 'up' ? '급등' : '급락'}`);
 }
 
 function renderControls() {
@@ -116,8 +147,6 @@ function renderControls() {
     toggle.setAttribute('aria-pressed', String(toastOn));
     toggle.textContent = toastOn ? '🔔 화면 알림 켬' : '🔕 화면 알림 끔';
   }
-  const empty = document.querySelector('#surge-feed .liq-empty');
-  if (empty) empty.textContent = emptyText();
 }
 
 function selectFromFeed(target: EventTarget | null) {
@@ -130,18 +159,18 @@ function selectFromFeed(target: EventTarget | null) {
 
 export function initSurgeFeed() {
   const saved = Number(load(THRESHOLD_KEY));
-  if (THRESHOLDS.includes(saved)) threshold = saved;
+  if (SURGE_THRESHOLDS.includes(saved)) threshold = saved;
   toastOn = load(TOAST_KEY) === 'on';
   renderControls();
 
   document.querySelectorAll<HTMLButtonElement>('.surge-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const next = Number(btn.dataset.surge);
-      if (!THRESHOLDS.includes(next) || next === threshold) return;
+      if (!SURGE_THRESHOLDS.includes(next) || next === threshold) return;
       threshold = next;
-      lastFired.clear();
       save(THRESHOLD_KEY, String(next));
       renderControls();
+      loadHistory();
       track('surge_threshold', { pct: next });
     });
   });
@@ -167,5 +196,7 @@ export function initSurgeFeed() {
     renderBadge();
   });
 
-  onUpbitTicker((market, t) => onTicker(market, t.trade_price, t.acc_trade_price_24h));
+  const detector = new SurgeDetector(onSurge);
+  onUpbitTicker((market, t) => detector.update(market, t.trade_price, t.acc_trade_price_24h, Date.now()));
+  loadHistory();
 }

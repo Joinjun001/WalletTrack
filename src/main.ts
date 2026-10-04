@@ -5,7 +5,7 @@ import { initKrMarket } from './krMarket.ts';
 import { initNetworkPanel } from './networkPanel.ts';
 import { initPriceChart } from './priceChart.ts';
 import { initCoinSidebar } from './coinSidebar.ts';
-import { initFuturesPanel } from './futuresPanel.ts';
+import { addOtherExchangeLiquidation, initFuturesPanel } from './futuresPanel.ts';
 import { initTools } from './tools.ts';
 import { initHistoryCharts } from './historyCharts.ts';
 import { initHistoryStats } from './historyStats.ts';
@@ -15,6 +15,7 @@ import { initHelp } from './help.ts';
 import { initSurgeFeed } from './surgeFeed.ts';
 import { initBtcStreams } from './btcStreams.ts';
 import { initBigTradeFeed } from './bigTradeFeed.ts';
+import { onBtcLiquidation } from './btcStreams.ts';
 
 function initTabs() {
   const buttons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
@@ -47,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initTools();
   initSoundAlerts();
   initBigTradeFeed();
+  onBtcLiquidation(addOtherExchangeLiquidation); // 선물·청산 탭 BTC 보기에 바이비트·OKX 청산도 넣는다
   initBtcStreams(); // 체결·청산 구독자(피드, 알림, 사운드)를 등록한 뒤 연결한다
   initLiveStreamDashboard();
   initHistoryStats();

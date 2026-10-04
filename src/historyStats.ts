@@ -1,11 +1,13 @@
 /**
  * 서버 기록 통계: 기간별(1h/4h/24h) 청산 합계와 코인별 청산 순위, 고래 거래의 거래소 입금·출금 흐름 (24시간)
+ * 기간별 청산 합계는 청산 피드 보기를 따른다 (BTC = 바이낸스 BTCUSDT, 전체 = 바이낸스 전체 코인). 서버는 바이낸스 청산만 모은다.
  */
 
 import { escapeHtml } from './txAnalysis.ts';
 import { formatUsdShort } from './market.ts';
 import { getHistory } from './historyApi.ts';
 import type { LiquidationBySymbol, LiquidationSummary, WhaleFlow } from './historyApi.ts';
+import { liqMode, onLiqModeChange } from './futuresPanel.ts';
 
 const REFRESH_MS = 60 * 1000;
 const WINDOWS = [1, 4, 24];
@@ -25,12 +27,18 @@ function formatBtcAmount(btc: number): string {
   return `${btc.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC`;
 }
 
+let statsRequest = 0;
+
 async function refreshLiquidationStats() {
+  const request = ++statsRequest;
+  const symbol = liqMode() === 'btc' ? '&symbol=BTCUSDT' : '';
+  setText('liq-stats-unit', liqMode() === 'btc' ? '바이낸스 BTCUSDT · 1분마다 갱신' : '바이낸스 전체 코인 · 1분마다 갱신');
   const [summaries, top] = await Promise.all([
-    Promise.all(WINDOWS.map((h) => getHistory<LiquidationSummary>(`/liquidations/summary?hours=${h}`))),
+    Promise.all(WINDOWS.map((h) => getHistory<LiquidationSummary>(`/liquidations/summary?hours=${h}${symbol}`))),
     getHistory<LiquidationBySymbol[]>(`/liquidations/by-symbol?hours=24&limit=${TOP_SYMBOLS}`)
   ]);
 
+  if (request !== statsRequest) return; // 그 사이 보기를 바꿨다
   const status = document.getElementById('liq-stats-status');
   if (status) status.hidden = summaries.some((s) => s !== null);
 
@@ -79,5 +87,6 @@ export function initHistoryStats() {
   refreshLiquidationStats();
   refreshWhaleFlow();
   setInterval(refreshLiquidationStats, REFRESH_MS);
+  onLiqModeChange(refreshLiquidationStats);
   setInterval(refreshWhaleFlow, REFRESH_MS);
 }

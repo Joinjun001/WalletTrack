@@ -49,6 +49,17 @@ export interface WhaleBucket {
   withdrawalBtc: number;
 }
 
+/** 급등·급락 기록 (/api/surges) */
+export interface SurgeRecord {
+  market: string;
+  direction: 'up' | 'down';
+  pct: number;
+  from: number;
+  price: number;
+  volumeKrw: number;
+  detectedAt: number;
+}
+
 export interface WhaleFlow {
   hours: number;
   depositBtc: number;

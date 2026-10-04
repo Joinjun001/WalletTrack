@@ -44,6 +44,20 @@ CREATE TABLE IF NOT EXISTS kimchi_premium (
   PRIMARY KEY (symbol, recorded_at)
 );
 
+-- 업비트 원화 마켓 급등·급락 (src/surge.ts 판정, 기준 2·3·5·10%마다 따로 저장)
+CREATE TABLE IF NOT EXISTS surge_events (
+  market       text NOT NULL,              -- KRW-ETH
+  threshold    real NOT NULL,              -- 판정 기준 (%)
+  direction    text NOT NULL CHECK (direction IN ('up', 'down')),
+  change_pct   double precision NOT NULL,  -- 5분 최저·최고가 대비 변화 (%)
+  from_price   double precision NOT NULL,
+  price        double precision NOT NULL,
+  volume_krw   double precision NOT NULL,  -- 24시간 거래대금
+  detected_at  timestamptz NOT NULL,
+  PRIMARY KEY (market, threshold, direction, detected_at)
+);
+CREATE INDEX IF NOT EXISTS surge_events_threshold_time ON surge_events (threshold, detected_at DESC);
+
 -- 웹 사용 기록 (익명). 브라우저마다 만든 무작위 ID만 쓰고 IP 등 개인정보는 저장하지 않는다
 CREATE TABLE IF NOT EXISTS usage_events (
   id         bigserial PRIMARY KEY,

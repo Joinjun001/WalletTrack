@@ -3,14 +3,15 @@
  *
  * GET /api/health                              수집 상태 (테이블별 마지막 저장 시각)
  * GET /api/whales?hours=24&minBtc=0.1&limit=300
- * GET /api/liquidations?hours=24&minUsd=1000&limit=40
- * GET /api/liquidations/summary?hours=24
+ * GET /api/liquidations?hours=24&minUsd=1000&limit=40[&symbol=BTCUSDT]
+ * GET /api/liquidations/summary?hours=24[&symbol=BTCUSDT]
  * GET /api/liquidations/by-symbol?hours=24&limit=10
  * GET /api/whales/flow?hours=24
  * GET /api/liquidations/buckets?symbol=BTCUSDT&hours=50&minutes=15   캔들 구간별 롱·숏 청산 합계 (차트 표시)
  * GET /api/whales/buckets?hours=50&minutes=15&minBtc=1               캔들 구간별 거래소 입금·출금 합계 (차트 표시)
  * GET /api/futures?symbol=BTCUSDT&hours=24
  * GET /api/kimchi?symbol=BTC&hours=24
+ * GET /api/surges?threshold=3&hours=24&limit=50                       업비트 원화 마켓 급등·급락 기록
  * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...], /api/upbit/tickers, /api/upbit/markets: 업비트 중계 (upbitProxy.ts)
  *
  * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts)
@@ -30,6 +31,11 @@ function numParam(q: Params, name: string, fallback: number, min: number, max: n
   const value = Number(q.get(name));
   if (!q.has(name) || !Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, value));
+}
+
+/** symbol을 주면 그 종목만, 없으면 전체 (null) */
+function optionalSymbol(q: Params): string | null {
+  return q.has('symbol') ? symbolParam(q, '') : null;
 }
 
 function symbolParam(q: Params, fallback: string): string {
@@ -61,7 +67,8 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
       SELECT (SELECT max(detected_at) FROM whale_txs) AS whales,
              (SELECT max(occurred_at) FROM liquidations) AS liquidations,
              (SELECT max(recorded_at) FROM futures_stats) AS futures,
-             (SELECT max(recorded_at) FROM kimchi_premium) AS kimchi`);
+             (SELECT max(recorded_at) FROM kimchi_premium) AS kimchi,
+             (SELECT max(detected_at) FROM surge_events) AS surges`);
     return {
       ok: true,
       latest: row ? Object.fromEntries(Object.entries(row).map(([k, v]) => [k, ms(v)])) : null
@@ -87,9 +94,9 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
   '/api/liquidations': async (q) => {
     const rows = await query<{ symbol: string; position: string; usd_value: number; occurred_at: Date }>(
       `SELECT symbol, position, usd_value, occurred_at FROM liquidations
-       WHERE occurred_at > now() - $1::float8 * interval '1 hour' AND usd_value >= $2
+       WHERE occurred_at > now() - $1::float8 * interval '1 hour' AND usd_value >= $2 AND ($4::text IS NULL OR symbol = $4)
        ORDER BY occurred_at DESC LIMIT $3`,
-      [numParam(q, 'hours', 24, 0.1, 24 * 30), numParam(q, 'minUsd', 1000, 0, 1e12), Math.round(numParam(q, 'limit', 40, 1, 500))]
+      [numParam(q, 'hours', 24, 0.1, 24 * 30), numParam(q, 'minUsd', 1000, 0, 1e12), Math.round(numParam(q, 'limit', 40, 1, 500)), optionalSymbol(q)]
     );
     return rows.map((r) => ({ symbol: r.symbol, position: r.position, usd: r.usd_value, occurredAt: ms(r.occurred_at) }));
   },
@@ -98,8 +105,8 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
     const hours = numParam(q, 'hours', 24, 0.1, 24 * 30);
     const rows = await query<{ position: string; usd: number; count: number }>(
       `SELECT position, sum(usd_value) AS usd, count(*) AS count FROM liquidations
-       WHERE occurred_at > now() - $1::float8 * interval '1 hour' GROUP BY position`,
-      [hours]
+       WHERE occurred_at > now() - $1::float8 * interval '1 hour' AND ($2::text IS NULL OR symbol = $2) GROUP BY position`,
+      [hours, optionalSymbol(q)]
     );
     const by = (p: string) => rows.find((r) => r.position === p);
     return {
@@ -196,6 +203,24 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
       [symbolParam(q, 'BTC'), hours, bucketMinutes(hours, 1)]
     );
     return rows.map((r) => ({ t: ms(r.t), premiumPct: r.premium_pct }));
+  },
+
+  '/api/surges': async (q) => {
+    const rows = await query<{ market: string; direction: string; change_pct: number; from_price: number; price: number; volume_krw: number; detected_at: Date }>(
+      `SELECT market, direction, change_pct, from_price, price, volume_krw, detected_at FROM surge_events
+       WHERE threshold = $1 AND detected_at > now() - $2::float8 * interval '1 hour'
+       ORDER BY detected_at DESC LIMIT $3`,
+      [numParam(q, 'threshold', 3, 0.1, 100), numParam(q, 'hours', 24, 0.1, 24 * 30), Math.round(numParam(q, 'limit', 50, 1, 500))]
+    );
+    return rows.map((r) => ({
+      market: r.market,
+      direction: r.direction,
+      pct: r.change_pct,
+      from: r.from_price,
+      price: r.price,
+      volumeKrw: r.volume_krw,
+      detectedAt: ms(r.detected_at)
+    }));
   },
 
   '/api/upbit/candles': async (q) => upbitCandles(q),

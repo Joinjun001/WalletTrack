@@ -4,12 +4,15 @@
  * - 강제청산: 바이낸스 선물 전체 마켓
  * - 선물 지표: 펀딩비, 미결제약정, 롱/숏 비율 (FUTURES_INTERVAL_SEC마다)
  * - 김치 프리미엄: 업비트 원화 가격 vs 바이낸스 달러 가격 (KIMCHI_INTERVAL_SEC마다)
+ * - 급등·급락: 업비트 원화 마켓 전체 실시간 시세 → 웹과 같은 SurgeDetector (src/surge.ts)
  */
 
 import { analyzeTransaction, fromMempoolTx } from '../../src/txAnalysis.ts';
 import type { MempoolTx } from '../../src/txAnalysis.ts';
 import { kimchiPremium, liquidatedPosition } from '../../src/market.ts';
 import { COINS } from '../../src/coins.ts';
+import { SurgeDetector } from '../../src/surge.ts';
+import type { SurgeEvent } from '../../src/surge.ts';
 import { config, log } from './config.ts';
 import { dryRun, migrate, query } from './db.ts';
 import { keepStream } from './stream.ts';
@@ -19,10 +22,12 @@ const LIQUIDATION_WS = 'wss://fstream.binance.com/market/ws/!forceOrder@arr';
 const FAPI = 'https://fapi.binance.com';
 const BINANCE_API = 'https://api.binance.com/api/v3';
 const UPBIT_API = 'https://api.upbit.com/v1';
+const UPBIT_WS = 'wss://api.upbit.com/websocket/v1';
+const UPBIT_MARKETS_REFRESH_MS = 6 * 60 * 60 * 1000; // 새로 상장된 마켓을 반영
 const STATS_LOG_MS = 10 * 60 * 1000;
 const RETENTION_CHECK_MS = 60 * 60 * 1000;
 
-const saved = { whales: 0, liquidations: 0, futures: 0, kimchi: 0 };
+const saved = { whales: 0, liquidations: 0, futures: 0, kimchi: 0, surges: 0 };
 
 async function getJson<T>(url: string): Promise<T> {
   const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
@@ -140,6 +145,57 @@ async function collectKimchi() {
   }
 }
 
+// ---------- 급등·급락 ----------
+
+async function saveSurge(e: SurgeEvent) {
+  try {
+    await query(
+      `INSERT INTO surge_events (market, threshold, direction, change_pct, from_price, price, volume_krw, detected_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, to_timestamp($8 / 1000.0)) ON CONFLICT DO NOTHING`,
+      [e.market, e.threshold, e.direction, e.pct, e.from, e.price, e.volumeKrw, e.at]
+    );
+    saved.surges++;
+  } catch (err) {
+    log('급등·급락 저장 실패:', (err as Error).message);
+  }
+}
+
+let surgeMarkets: string[] = [];
+
+async function loadUpbitMarkets() {
+  try {
+    const list = await getJson<{ market: string }[]>(`${UPBIT_API}/market/all?isDetails=false`);
+    surgeMarkets = list.map((m) => m.market).filter((m) => m.startsWith('KRW-'));
+  } catch (e) {
+    log('업비트 마켓 목록 실패:', (e as Error).message);
+  }
+}
+
+async function collectSurges() {
+  await loadUpbitMarkets();
+  const detector = new SurgeDetector((e) => { saveSurge(e); });
+  let socket: WebSocket | null = null;
+  keepStream('업비트 시세', {
+    url: UPBIT_WS,
+    idleMs: 60_000,
+    binary: true,
+    onOpen: (ws) => {
+      socket = ws;
+      ws.send(JSON.stringify([{ ticket: 'wallet-track-collector' }, { type: 'ticker', codes: surgeMarkets }]));
+    },
+    onMessage: (data) => {
+      const t = JSON.parse(data) as { code?: string; trade_price?: number; acc_trade_price_24h?: number };
+      if (t.code && t.trade_price) detector.update(t.code, t.trade_price, t.acc_trade_price_24h ?? 0, Date.now());
+    }
+  });
+  // 마켓 목록이 바뀌면 끊어서 새 목록으로 다시 구독한다 (keepStream이 다시 연결)
+  setInterval(async () => {
+    const before = surgeMarkets.join(',');
+    await loadUpbitMarkets();
+    if (surgeMarkets.join(',') !== before) socket?.close();
+  }, UPBIT_MARKETS_REFRESH_MS);
+}
+
 // ---------- 오래된 기록 정리 ----------
 
 async function deleteOldRows() {
@@ -148,6 +204,7 @@ async function deleteOldRows() {
     ['liquidations', 'occurred_at'],
     ['futures_stats', 'recorded_at'],
     ['kimchi_premium', 'recorded_at'],
+    ['surge_events', 'detected_at'],
     ['usage_events', 'created_at']
   ];
   try {
@@ -172,11 +229,12 @@ async function main() {
   collectLiquidations();
   every(config.futuresIntervalMs, collectFutures);
   every(config.kimchiIntervalMs, collectKimchi);
+  collectSurges();
   if (!dryRun) every(RETENTION_CHECK_MS, deleteOldRows);
 
   setInterval(() => {
-    log(`최근 10분 저장: 고래 ${saved.whales}, 청산 ${saved.liquidations}, 선물 ${saved.futures}, 김프 ${saved.kimchi}`);
-    saved.whales = saved.liquidations = saved.futures = saved.kimchi = 0;
+    log(`최근 10분 저장: 고래 ${saved.whales}, 청산 ${saved.liquidations}, 선물 ${saved.futures}, 김프 ${saved.kimchi}, 급등·급락 ${saved.surges}`);
+    saved.whales = saved.liquidations = saved.futures = saved.kimchi = saved.surges = 0;
   }, STATS_LOG_MS);
 }
 

@@ -9,13 +9,16 @@ interface StreamOptions {
   idleMs: number;
   onOpen?: (ws: WebSocket) => void;
   onMessage: (data: string) => void | Promise<void>;
+  binary?: boolean; // 업비트처럼 바이너리 프레임으로 JSON을 보내는 곳
 }
 
-export function keepStream(name: string, { url, idleMs, onOpen, onMessage }: StreamOptions) {
+export function keepStream(name: string, { url, idleMs, onOpen, onMessage, binary }: StreamOptions) {
+  const decoder = new TextDecoder();
   let failures = 0;
 
   const connect = () => {
     const ws = new WebSocket(url);
+    if (binary) ws.binaryType = 'arraybuffer';
     let idleTimer: ReturnType<typeof setTimeout> | undefined;
     const resetIdle = () => {
       clearTimeout(idleTimer);
@@ -33,7 +36,8 @@ export function keepStream(name: string, { url, idleMs, onOpen, onMessage }: Str
     };
     ws.onmessage = (event) => {
       resetIdle();
-      Promise.resolve(onMessage(String(event.data))).catch((e) => log(`${name}: 처리 실패`, e));
+      const data = typeof event.data === 'string' ? event.data : decoder.decode(event.data as ArrayBuffer);
+      Promise.resolve(onMessage(data)).catch((e) => log(`${name}: 처리 실패`, e));
     };
     ws.onclose = () => {
       clearTimeout(idleTimer);
