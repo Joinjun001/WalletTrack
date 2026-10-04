@@ -1,11 +1,12 @@
 /**
- * 사이드 도구: BTC ↔ 사토시 ↔ 원화 ↔ 달러 환산 계산기, BTC 원화 가격 알림, 김프 알림, 고래 거래 알림 (브라우저 알림 + 화면 토스트)
+ * 사이드 도구: BTC ↔ 사토시 ↔ 원화 ↔ 달러 환산 계산기, BTC 원화 가격 알림, 김프 알림, 고래(대형 체결) 알림 (브라우저 알림 + 화면 토스트)
  */
 
 import { prices, subscribePrices } from './priceStore.ts';
 import { alertDirection, formatKrw, formatSignedPct, isThresholdCrossed, kimchiPremium } from './market.ts';
 import type { PriceAlert } from './market.ts';
-import { onLiveTx } from './btcWhaleTracker.ts';
+import { onBtcTrade } from './btcStreams.ts';
+import { EXCHANGE_LABELS } from './exchangeFeeds.ts';
 import { track, trackOnce } from './analytics.ts';
 
 const SATS_PER_BTC = 100_000_000;
@@ -215,7 +216,7 @@ function initAlerts() {
   });
 }
 
-// ---------- 고래 거래 알림 ----------
+// ---------- 고래 알림 (BTC 대형 체결) ----------
 
 function initWhaleAlert() {
   const select = document.getElementById('whale-alert-threshold') as HTMLSelectElement | null;
@@ -232,15 +233,14 @@ function initWhaleAlert() {
   });
 
   let lastNotifiedAt = 0;
-  onLiveTx((tx) => {
-    if (!(threshold > 0) || tx.btcAmount < threshold) return;
+  onBtcTrade((t) => {
+    if (!(threshold > 0) || t.btc < threshold) return;
     const now = Date.now();
     if (now - lastNotifiedAt < WHALE_ALERT_GAP_MS) return;
     lastNotifiedAt = now;
-    const where = tx.direction === 'deposit' ? `${tx.exchangeName} 입금` : tx.direction === 'withdrawal' ? `${tx.exchangeName} 출금` : '전송';
-    const krw = prices.krwBtc > 0 ? ` (약 ${formatKrw(tx.btcAmount * prices.krwBtc)})` : '';
+    const krw = prices.krwBtc > 0 ? ` (약 ${formatKrw(t.btc * prices.krwBtc)})` : '';
     track('whale_alert_fired', { btc: threshold });
-    notify('고래 거래', `🐋 ${tx.btcAmount.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC ${where}${krw}`);
+    notify('고래 체결', `🐋 ${EXCHANGE_LABELS[t.exchange]} ${t.btc.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC ${t.side === 'buy' ? '매수' : '매도'}${krw}`);
   });
 }
 

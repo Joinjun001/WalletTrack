@@ -1,17 +1,17 @@
 /**
- * 사운드 알림: 큰 강제청산(바이낸스 선물 전체 마켓)과 BTCUSDT 선물 대량 체결이 나면 소리로 알린다.
+ * 사운드 알림: 비트코인 강제청산(바이낸스·바이비트·OKX)과 대형 체결(바이낸스 선물·현물, 바이비트, OKX, 업비트)이 나면 소리로 알린다.
+ * 데이터는 btcStreams.ts가 모아 준다. 대형 체결은 🐋 대형 체결 피드와 같은 데이터라 소리가 나면 피드에서 확인할 수 있다.
  * 소리는 8비트 아르페지오(sounds.ts)이고 볼륨을 정할 수 있다. 롱 청산·매도는 내려가는 음, 숏 청산·매수는 올라가는 음.
  * 청산은 금액이 클수록($100K / $500K / $2M) 단계가 올라가 더 크고 낮게, 여러 번 울린다. 체결은 기준 대비 배수로 단계를 정한다.
  */
 
-import { onLiveLiquidation } from './futuresPanel.ts';
+import { onBtcLiquidation, onBtcTrade } from './btcStreams.ts';
+import { prices } from './priceStore.ts';
 import { track } from './analytics.ts';
 import { liquidationSoundTier, tradeSoundTier } from './market.ts';
 import type { SoundTier } from './market.ts';
 import { playAlertSound } from './sounds.ts';
 
-// 바이낸스 선물 시장 데이터 스트림은 /market 경로 (futuresPanel.ts 참고)
-const TRADE_WS = 'wss://fstream.binance.com/market/ws/btcusdt@aggTrade';
 const LIQ_SOUND_KEY = 'wallettrack.liqSoundUsd';
 const TRADE_SOUND_KEY = 'wallettrack.tradeSoundUsd';
 const PROMPT_KEY = 'wallettrack.soundPrompt'; // 처음 방문 때 물어본 결과 (accepted | declined)
@@ -20,7 +20,6 @@ const DEFAULT_VOLUME = 70;
 const DEFAULT_LIQ_USD = 100_000;     // 처음 물어볼 때 '소리 켜기'를 누르면 쓰는 기준
 const DEFAULT_TRADE_USD = 1_000_000;
 const MIN_SOUND_GAP_MS = 150;      // 연달아 터질 때 소리가 뭉개지지 않게
-const TRADE_MERGE_MS = 100;         // 큰 시장가 주문은 여러 체결로 쪼개져 오므로 같은 방향 체결을 잠깐 모아서 본다
 
 let audio: AudioContext | null = null;
 let master: GainNode | null = null; // 볼륨 → 압축기(여러 소리가 겹쳐도 찢어지지 않게) → 스피커
@@ -101,57 +100,6 @@ function renderNote() {
     : '이 페이지가 열려 있을 때만 울려요. 롱 청산·매도는 내려가는 음, 숏 청산·매수는 올라가는 음. 청산이 $100K·$500K·$2M을 넘을 때마다 더 크게 울려요';
 }
 
-// ---------- 대량 체결 ----------
-
-interface AggTrade {
-  p: string;  // 가격
-  q: string;  // 수량
-  T: number;  // 체결 시각
-  m: boolean; // true = 매수자가 메이커 → 시장가 매도
-}
-
-let tradeWs: WebSocket | null = null;
-let pending: { sell: boolean; usd: number } | null = null;
-let flushTimer = 0;
-
-function flushTrade() {
-  if (pending && pending.usd >= tradeThreshold) play(!pending.sell, tradeSoundTier(pending.usd, tradeThreshold));
-  pending = null;
-  flushTimer = 0;
-}
-
-function onTrade(trade: AggTrade) {
-  const usd = parseFloat(trade.p) * parseFloat(trade.q);
-  if (!(usd > 0)) return;
-  if (pending && pending.sell !== trade.m) flushTrade();
-  pending = pending ? { sell: trade.m, usd: pending.usd + usd } : { sell: trade.m, usd };
-  if (!flushTimer) flushTimer = window.setTimeout(flushTrade, TRADE_MERGE_MS);
-}
-
-/** 대량 체결 소리가 켜져 있을 때만 연결한다 (체결 스트림은 메시지가 많다) */
-function syncTradeStream() {
-  if (tradeThreshold > 0 && !tradeWs) {
-    const ws = new WebSocket(TRADE_WS);
-    tradeWs = ws;
-    ws.onmessage = (event) => {
-      try {
-        onTrade(JSON.parse(event.data));
-      } catch (e) {
-        console.error('Trade WS Parse Error:', e);
-      }
-    };
-    ws.onclose = () => {
-      if (tradeWs !== ws) return;
-      tradeWs = null;
-      setTimeout(syncTradeStream, 3000);
-    };
-  } else if (!(tradeThreshold > 0) && tradeWs) {
-    const ws = tradeWs;
-    tradeWs = null;
-    ws.close();
-  }
-}
-
 // ---------- 화면 ----------
 
 type Kind = 'liquidation' | 'trade';
@@ -171,10 +119,7 @@ function setThreshold(kind: Kind, value: number, save: boolean) {
   if (select && ![...select.options].some((o) => Number(o.value) === value)) value = 0;
   if (select) select.value = String(value);
   if (kind === 'liquidation') liqThreshold = value;
-  else {
-    tradeThreshold = value;
-    syncTradeStream();
-  }
+  else tradeThreshold = value;
   if (save) saveNumber(SELECTS[kind].key, value);
 }
 
@@ -248,7 +193,7 @@ function renderPrompt() {
   const allow = document.getElementById('sound-prompt-allow');
   const dismiss = document.getElementById('sound-prompt-dismiss');
   if (text) text.textContent = mode === 'ask'
-    ? '🔊 큰 청산이나 대량 체결이 나면 소리로 알려드릴까요?'
+    ? '🔊 비트코인 큰 청산이나 대형 체결이 나면 소리로 알려드릴까요?'
     : '🔊 사운드 알림이 켜져 있어요. 소리를 들으려면 눌러 주세요';
   if (allow) allow.textContent = '소리 켜기';
   if (dismiss) dismiss.textContent = mode === 'ask' ? '괜찮아요' : '알림 끄기';
@@ -337,8 +282,13 @@ export function initSoundAlerts() {
   window.addEventListener('pointerdown', unlockOnce);
   window.addEventListener('keydown', unlockOnce);
 
-  onLiveLiquidation((position, usd) => {
-    if (liqThreshold > 0 && usd >= liqThreshold) play(position === 'short', liquidationSoundTier(usd));
+  onBtcLiquidation((l) => {
+    if (liqThreshold > 0 && l.usd >= liqThreshold) play(l.position === 'short', liquidationSoundTier(l.usd));
+  });
+  // 체결 기준은 달러. 업비트(원화) 체결도 같은 BTC 달러 시세로 환산한다
+  onBtcTrade((t) => {
+    const usd = t.btc * prices.usdBtc;
+    if (tradeThreshold > 0 && usd >= tradeThreshold) play(t.side === 'buy', tradeSoundTier(usd, tradeThreshold));
   });
 
   initPrompt();

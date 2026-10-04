@@ -37,6 +37,13 @@ type TickerListener = (market: string, t: UpbitTicker) => void;
 const tickerListeners: TickerListener[] = [];
 const latestTickers = new Map<string, UpbitTicker>(); // 마켓별 마지막 시세 (상단 시세 바)
 
+const tradeListeners: ((msg: Record<string, unknown>) => void)[] = [];
+
+/** 업비트 KRW-BTC 체결 (대형 체결 피드). 시세와 같은 연결로 받는다 */
+export function onUpbitBtcTrade(fn: (msg: Record<string, unknown>) => void) {
+  tradeListeners.push(fn);
+}
+
 /** 업비트 원화 마켓 시세 수신 (기본 UPBIT_CODES, subscribeUpbitMarkets로 넓힌 마켓 포함) */
 export function onUpbitTicker(fn: TickerListener) {
   tickerListeners.push(fn);
@@ -82,12 +89,14 @@ function connectUpbitWebSocket() {
   const decoder = new TextDecoder();
 
   ws.onopen = () => {
-    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: wsCodes }]));
+    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: wsCodes }, { type: 'trade', codes: ['KRW-BTC'] }]));
   };
   ws.onmessage = (event) => {
     try {
       const text = typeof event.data === 'string' ? event.data : decoder.decode(event.data);
-      applyUpbitTicker(JSON.parse(text));
+      const msg = JSON.parse(text);
+      if (msg?.type === 'trade') tradeListeners.forEach((fn) => fn(msg));
+      else applyUpbitTicker(msg);
     } catch (e) {
       console.error('Upbit WS Parse Error:', e);
     }

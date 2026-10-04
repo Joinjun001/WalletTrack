@@ -82,7 +82,7 @@
             <div class="interval-group marker-group" role="group" aria-label="차트에 표시">
               <span class="marker-label" data-help="chartMarkers">표시</span>
               <button type="button" class="interval-btn marker-btn" data-marker="liq" title="큰 강제청산 (바이낸스 선물, 이 코인)">💥 청산</button>
-              <button type="button" class="interval-btn marker-btn" data-marker="whale" title="고래 거래소 입금·출금 (비트코인)">🐋 고래</button>
+              <button type="button" class="interval-btn marker-btn" data-marker="whale" title="온체인 거래소 입금·출금 (비트코인)">⛓️ 입출금</button>
             </div>
             <div class="interval-group">
               <button class="interval-btn" data-interval="1m">1분</button>
@@ -96,13 +96,44 @@
         </div>
 
         <nav class="tab-bar" role="tablist">
-          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="whale">🐋 고래 피드</button>
+          <button class="tab-btn active" role="tab" aria-selected="true" data-tab="whale">🐋 대형 체결</button>
           <button class="tab-btn" role="tab" aria-selected="false" data-tab="surge">🚀 급등·급락 <span id="surge-badge" class="tab-badge" hidden></span></button>
           <button class="tab-btn" role="tab" aria-selected="false" data-tab="futures">💥 선물·청산</button>
+          <button class="tab-btn" role="tab" aria-selected="false" data-tab="onchain">⛓️ 온체인 이동</button>
           <button class="tab-btn" role="tab" aria-selected="false" data-tab="history">📈 기록 추이</button>
         </nav>
 
         <div class="tab-panel" role="tabpanel" data-panel="whale">
+          <div class="control-bar glass-panel">
+            <div class="control-left">
+              <span class="filter-label" data-help="bigTrades">체결 크기:</span>
+              <button class="threshold-btn big-btn active" data-big="1">≥ 1 BTC</button>
+              <button class="threshold-btn big-btn" data-big="5">≥ 5 BTC</button>
+              <button class="threshold-btn big-btn" data-big="10">≥ 10 BTC</button>
+              <button class="threshold-btn big-btn whale-filter" data-big="50">🐋 ≥ 50 BTC</button>
+            </div>
+            <div class="control-right">
+              <span id="big-count" class="count-tag">0건</span>
+            </div>
+          </div>
+
+          <div class="whale-flow glass-panel">
+            <span class="flow-title">최근 1시간 고래 체결 <span class="info-unit">1 BTC 이상 · 페이지를 연 뒤부터</span></span>
+            <span>매수 <strong id="big-buy" class="up">-</strong></span>
+            <span>매도 <strong id="big-sell" class="down">-</strong></span>
+            <span title="매수 - 매도. 양수면 큰손이 더 많이 샀어요">순매수 <strong id="big-net">-</strong></span>
+          </div>
+
+          <div class="glass-panel liq-card">
+            <h2 class="info-title">🐋 대형 체결 <span class="info-unit">BTC · 바이낸스 선물·현물 · 바이비트 · OKX · 업비트</span></h2>
+            <ul id="big-feed" class="liq-feed big-feed">
+              <li class="liq-empty">1 BTC 이상 체결을 기다리는 중... (페이지를 연 뒤부터 모아요)</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="tab-panel" role="tabpanel" data-panel="onchain" hidden>
+          <p class="table-note onchain-note">비트코인 블록체인 위의 송금이에요 (거래소에서 사고판 기록이 아니에요). 알려진 거래소 지갑으로 들어가면 입금, 나오면 출금으로 표시해요.</p>
           <div class="control-bar glass-panel">
             <div class="control-left">
               <span class="filter-label">거래량 필터:</span>
@@ -336,7 +367,7 @@
         </div>
 
         <div class="info-card glass-panel tool-card">
-          <h2 class="info-title">🐋 고래 알림 <span class="info-unit">실시간 거래</span></h2>
+          <h2 class="info-title">🐋 고래 알림 <span class="info-unit">BTC 대형 체결</span></h2>
           <label class="calc-row whale-alert-row">
             <span>기준</span>
             <select id="whale-alert-threshold">
@@ -351,7 +382,7 @@
         </div>
 
         <div class="info-card glass-panel tool-card sound-card">
-          <h2 class="info-title">🔊 사운드 알림 <span class="info-unit">바이낸스 선물</span></h2>
+          <h2 class="info-title" data-help="soundAlerts">🔊 사운드 알림 <span class="info-unit">BTC</span></h2>
           <label class="calc-row whale-alert-row">
             <span>청산</span>
             <select id="liq-sound-threshold">

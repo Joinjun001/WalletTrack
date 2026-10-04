@@ -13,6 +13,8 @@ import { initSoundAlerts } from './soundAlerts.ts';
 import { initTheme } from './theme.ts';
 import { initHelp } from './help.ts';
 import { initSurgeFeed } from './surgeFeed.ts';
+import { initBtcStreams } from './btcStreams.ts';
+import { initBigTradeFeed } from './bigTradeFeed.ts';
 
 function initTabs() {
   const buttons = document.querySelectorAll<HTMLButtonElement>('.tab-btn');
@@ -44,6 +46,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initFuturesPanel();
   initTools();
   initSoundAlerts();
+  initBigTradeFeed();
+  initBtcStreams(); // 체결·청산 구독자(피드, 알림, 사운드)를 등록한 뒤 연결한다
   initLiveStreamDashboard();
   initHistoryStats();
   initHistoryCharts();

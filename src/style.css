@@ -1364,6 +1364,37 @@ body {
 .marker-btn:disabled { opacity: 0.4; cursor: default; }
 .marker-btn:disabled:hover { background: var(--surface-1); border-color: var(--line-strong); color: var(--text-muted); }
 
+/* 🐋 대형 체결 피드 (bigTradeFeed.ts) */
+.big-item {
+  display: grid;
+  grid-template-columns: 3rem 7.5rem minmax(0, 1fr) 6.5rem 4.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.big-item.buy { background: rgba(var(--up-rgb), 0.1); border-left: 3px solid var(--up); }
+.big-item.sell { background: rgba(var(--down-rgb), 0.12); border-left: 3px solid var(--down); }
+.big-item.whale { box-shadow: 0 0 16px rgba(255, 215, 0, 0.35); border-left-color: #FFD700; }
+.big-item:hover { outline: 1px solid var(--line-strong); }
+.big-side { font-weight: 800; }
+.big-item.buy .big-side { color: var(--up); }
+.big-item.sell .big-side { color: var(--down); }
+.big-btc { font-family: var(--font-mono); font-weight: 800; text-align: right; white-space: nowrap; }
+.big-value { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.big-exchange { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; }
+.big-item .liq-time { text-align: right; }
+.onchain-note { margin: 0 0 0.75rem; }
+
+@media (max-width: 600px) {
+  .big-item { grid-template-columns: 2.5rem 6.5rem minmax(0, 1fr) 4rem; font-size: 0.8rem; }
+  .big-value { display: none; }
+}
+
 /* 탭의 안 본 개수 */
 .tab-badge {
   display: inline-block;
