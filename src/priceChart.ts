@@ -2,14 +2,15 @@
  * 업비트 원화 캔들 차트 (TradingView lightweight-charts). 과거 캔들은 REST, 현재 캔들은 실시간 시세로 갱신한다.
  * 업비트는 한 번에 200개까지만 주므로, 차트를 왼쪽 끝 가까이 옮기면 그 이전 200개를 이어서 받는다.
  * 캔들 위에 큰 강제청산(바이낸스 선물, 그 코인)과 고래 거래소 입출금(비트코인만)을 표시한다 (기록 서버, 캔들 구간별 합계).
+ * 차트 위 정보 줄에는 커서를 올린 캔들(없으면 최신 캔들)의 시가·고가·저가·종가·변동률·거래량을 보여 준다.
  */
 
 import { createChart, createSeriesMarkers, CandlestickSeries, HistogramSeries, ColorType } from 'lightweight-charts';
-import type { DeepPartial, IChartApi, ISeriesApi, ISeriesMarkersPluginApi, SeriesMarker, Time, TimeChartOptions, UTCTimestamp } from 'lightweight-charts';
+import type { CandlestickData, DeepPartial, HistogramData, IChartApi, ISeriesApi, ISeriesMarkersPluginApi, SeriesMarker, Time, TimeChartOptions, UTCTimestamp } from 'lightweight-charts';
 import { onUpbitTicker } from './krMarket.ts';
 import { coinName } from './coins.ts';
-import { applyTick, candleTimeOf, formatUsdShort, krwPricePrecision, KST_OFFSET_SEC, topByValue } from './market.ts';
-import type { Candle } from './market.ts';
+import { applyTick, candleTimeOf, formatKrwShort, formatSignedPct, formatUsdShort, krwPricePrecision, KST_OFFSET_SEC, topByValue } from './market.ts';
+import type { Candle, CandleInterval } from './market.ts';
 import { track } from './analytics.ts';
 import { getHistory, getUpbit } from './historyApi.ts';
 import type { LiquidationBucket, WhaleBucket } from './historyApi.ts';
@@ -29,17 +30,32 @@ const MIN_LIQ_USD = 20_000;
 const MAX_WHALE_MARKERS = 3;  // 입금·출금 각각
 const MIN_WHALE_BTC = 50;
 const MAX_MARKER_HOURS = 720; // 기록 서버가 받는 최대 기간
+const MAX_MARKER_BUCKETS = 4_900; // 기록 서버가 한 번에 받는 구간 수(5,000)보다 조금 적게
 // 고래 입출금 색은 고래 카드와 같게 고정 (상승·하락 색 설정과 무관)
 const WHALE_DEPOSIT_COLOR = '#FF5252';
 const WHALE_WITHDRAWAL_COLOR = '#00C853';
 type MarkerKind = 'liq' | 'whale';
 
-const INTERVALS: Record<string, { path: string; seconds: number }> = {
-  '1m': { path: 'minutes/1', seconds: 60 },
-  '15m': { path: 'minutes/15', seconds: 900 },
-  '1h': { path: 'minutes/60', seconds: 3600 },
-  '1d': { path: 'days', seconds: 86400 }
+const DAY = 86400;
+/** bucket: 캔들 구간 (주·월은 길이가 일정하지 않다). markers: 청산·고래 표시 가능 여부 (기록 서버 구간은 최대 1일) */
+const INTERVALS: Record<string, { path: string; bucket: CandleInterval; markers: boolean }> = {
+  '1m': { path: 'minutes/1', bucket: 60, markers: true },
+  '3m': { path: 'minutes/3', bucket: 180, markers: true },
+  '5m': { path: 'minutes/5', bucket: 300, markers: true },
+  '15m': { path: 'minutes/15', bucket: 900, markers: true },
+  '30m': { path: 'minutes/30', bucket: 1800, markers: true },
+  '1h': { path: 'minutes/60', bucket: 3600, markers: true },
+  '4h': { path: 'minutes/240', bucket: 14400, markers: true },
+  '1d': { path: 'days', bucket: DAY, markers: true },
+  '1w': { path: 'weeks', bucket: 'week', markers: false },
+  '1M': { path: 'months', bucket: 'month', markers: false }
 };
+
+/** 표시 구간의 초 (주·월은 정보 줄 시각 형식에만 쓴다) */
+function intervalSeconds(): number {
+  const b = INTERVALS[interval].bucket;
+  return b === 'week' ? 7 * DAY : b === 'month' ? 30 * DAY : b;
+}
 
 interface UpbitCandle {
   candle_date_time_utc: string; // "2026-10-03T12:00:00"
@@ -48,6 +64,7 @@ interface UpbitCandle {
   low_price: number;
   trade_price: number;
   candle_acc_trade_volume: number;
+  candle_acc_trade_price: number; // 원화 거래대금
 }
 
 let chart: IChartApi | null = null;
@@ -64,6 +81,8 @@ let pricePrecision = 0;
 let oldestUtc: string | null = null; // 받아 둔 가장 오래된 캔들 시각 (업비트 to 값으로 쓴다)
 let loadingOlder = false;
 let noMoreOlder = false;
+const turnover = new Map<number, number>(); // 캔들 시각 → 원화 거래대금 (정보 줄)
+let hovering = false;
 
 function toCandle(c: UpbitCandle): Candle {
   return {
@@ -129,12 +148,12 @@ function drawMarkers() {
     seriesMarkers.setMarkers([]);
     return;
   }
-  const seconds = INTERVALS[interval].seconds;
+  const bucket = INTERVALS[interval].bucket;
   const times = new Set(candleSeries.data().map((c) => c.time as number));
   const { up, down } = marketColors();
   const markers: SeriesMarker<Time>[] = [];
   const add = (t: number, marker: Omit<SeriesMarker<Time>, 'time'>) => {
-    const time = candleTimeOf(t, seconds);
+    const time = candleTimeOf(t, bucket);
     if (times.has(time)) markers.push({ ...marker, time: time as UTCTimestamp } as SeriesMarker<Time>);
   };
   if (markerKinds.has('liq')) {
@@ -163,17 +182,19 @@ async function refreshMarkers() {
   if (!candleSeries) return;
   const first = candleSeries.data()[0];
   const key = `${symbol}|${interval}`;
-  const wantLiq = markerKinds.has('liq');
-  const wantWhale = markerKinds.has('whale') && symbol === 'BTC';
+  const allowed = INTERVALS[interval].markers;
+  const wantLiq = allowed && markerKinds.has('liq');
+  const wantWhale = allowed && markerKinds.has('whale') && symbol === 'BTC';
   if (!first || (!wantLiq && !wantWhale)) {
     drawMarkers();
     return;
   }
   const request = ++markerRequest;
-  const seconds = INTERVALS[interval].seconds;
-  const firstMs = ((first.time as number) - KST_OFFSET_SEC) * 1000;
-  const hours = Math.min(MAX_MARKER_HOURS, (Date.now() - firstMs) / 3_600_000 + seconds / 3600).toFixed(2);
+  const seconds = intervalSeconds();
   const minutes = seconds / 60;
+  const firstMs = ((first.time as number) - KST_OFFSET_SEC) * 1000;
+  // 이전 캔들을 많이 불러와도 기록 서버의 구간 수 제한을 넘지 않게 한다 (넘으면 표시가 통째로 사라진다)
+  const hours = Math.min(MAX_MARKER_HOURS, (MAX_MARKER_BUCKETS * minutes) / 60, (Date.now() - firstMs) / 3_600_000 + seconds / 3600).toFixed(2);
   const [liq, whale] = await Promise.all([
     wantLiq ? getHistory<LiquidationBucket[]>(`/liquidations/buckets?symbol=${encodeURIComponent(symbol)}USDT&hours=${hours}&minutes=${minutes}`) : null,
     wantWhale ? getHistory<WhaleBucket[]>(`/whales/buckets?hours=${hours}&minutes=${minutes}`) : null
@@ -187,9 +208,12 @@ function renderMarkerButtons() {
   document.querySelectorAll<HTMLButtonElement>('.marker-btn').forEach((btn) => {
     const kind = btn.dataset.marker as MarkerKind;
     const whaleOff = kind === 'whale' && symbol !== 'BTC';
-    btn.disabled = whaleOff;
-    btn.title = whaleOff ? '고래 입출금은 비트코인 차트에서만 보여요' : btn.dataset.title || '';
-    const on = markerKinds.has(kind) && !whaleOff;
+    const intervalOff = !INTERVALS[interval].markers;
+    btn.disabled = whaleOff || intervalOff;
+    btn.title = intervalOff ? '주봉·월봉에서는 표시하지 않아요'
+      : whaleOff ? '고래 입출금은 비트코인 차트에서만 보여요'
+      : btn.dataset.title || '';
+    const on = markerKinds.has(kind) && !whaleOff && !intervalOff;
     btn.classList.toggle('active', on);
     btn.setAttribute('aria-pressed', String(on));
   });
@@ -222,7 +246,10 @@ async function loadCandles() {
   candleSeries.applyOptions({ priceFormat: { type: 'price', precision: pricePrecision, minMove: 1 / 10 ** pricePrecision } });
   candleSeries.setData(candles.map((c) => ({ ...c, time: c.time as UTCTimestamp })));
   volumeSeries.setData(list.map((c, i) => volumeBar(c, candles[i].time)));
+  turnover.clear();
+  list.forEach((c, i) => turnover.set(candles[i].time, c.candle_acc_trade_price));
   lastCandle = candles[candles.length - 1];
+  renderLatestLegend();
   oldestUtc = list[0].candle_date_time_utc;
   noMoreOlder = list.length < CANDLE_COUNT;
   refreshMarkers();
@@ -244,6 +271,7 @@ async function loadOlderCandles() {
     const keep = candles.map((c, i) => [c, list[i]] as const).filter(([c]) => firstTime === undefined || c.time < firstTime);
     candleSeries.setData([...keep.map(([c]) => ({ ...c, time: c.time as UTCTimestamp })), ...candleSeries.data()]);
     volumeSeries.setData([...keep.map(([c, raw]) => volumeBar(raw, c.time)), ...volumeSeries.data()]);
+    for (const [c, raw] of keep) turnover.set(c.time, raw.candle_acc_trade_price);
     oldestUtc = list[0].candle_date_time_utc;
     refreshMarkers();
     track('chart_load_older', { interval, symbol });
@@ -256,6 +284,7 @@ async function loadOlderCandles() {
 function resetCandles() {
   markerData = null;
   drawMarkers();
+  turnover.clear();
   lastCandle = null;
   oldestUtc = null;
   noMoreOlder = false;
@@ -273,14 +302,76 @@ async function refreshLatestCandle() {
   lastCandle = candle;
   candleSeries.update({ ...candle, time: candle.time as UTCTimestamp });
   volumeSeries.update(volumeBar(raw, candle.time));
+  turnover.set(candle.time, raw.candle_acc_trade_price);
+  renderLatestLegend();
 }
 
 function applyLivePrice(price: number, tradeMs: number) {
   if (!candleSeries || !lastCandle) return;
-  const next = applyTick(lastCandle, price, candleTimeOf(tradeMs, INTERVALS[interval].seconds));
+  const next = applyTick(lastCandle, price, candleTimeOf(tradeMs, INTERVALS[interval].bucket));
   if (!next) return;
   lastCandle = next;
   candleSeries.update({ ...next, time: next.time as UTCTimestamp });
+  renderLatestLegend();
+}
+
+// ---------- 정보 줄 (커서를 올린 캔들) ----------
+
+function formatLegendTime(time: number): string {
+  const d = new Date(time * 1000); // 이미 KST로 밀어 둔 시각이라 UTC 값을 그대로 읽는다
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const date = `${d.getUTCFullYear()}.${pad(d.getUTCMonth() + 1)}.${pad(d.getUTCDate())}`;
+  if (INTERVALS[interval].bucket === 'month') return date.slice(0, 7);
+  if (intervalSeconds() >= DAY) return date;
+  return `${date} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+function formatVolume(v: number): string {
+  const digits = v >= 1000 ? 0 : v >= 1 ? 2 : 4;
+  return v.toLocaleString('ko-KR', { maximumFractionDigits: digits });
+}
+
+function formatTurnover(krw: number): string {
+  if (krw >= 1e12) return `${(krw / 1e12).toFixed(2)}조원`;
+  if (krw >= 1e8) return `${(krw / 1e8).toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}억원`;
+  return formatKrwShort(krw);
+}
+
+/** index: 캔들 데이터 순번 (= 차트의 논리 위치) */
+function renderLegend(index: number) {
+  const legend = document.getElementById('price-legend');
+  if (!legend || !candleSeries || !volumeSeries) return;
+  const bar = candleSeries.dataByIndex(index) as CandlestickData<UTCTimestamp> | null;
+  if (!bar || !('open' in bar)) {
+    legend.hidden = true;
+    return;
+  }
+  legend.hidden = false;
+  const prev = index > 0 ? (candleSeries.dataByIndex(index - 1) as CandlestickData | null) : null;
+  // 업비트처럼 직전 캔들 종가 대비 (첫 캔들은 시가 대비)
+  const base = prev && 'close' in prev ? prev.close : bar.open;
+  const pct = base > 0 ? ((bar.close - base) / base) * 100 : 0;
+  const vol = volumeSeries.dataByIndex(index) as HistogramData | null;
+  const krw = turnover.get(bar.time as number);
+  const price = (p: number) => p.toLocaleString('ko-KR', { minimumFractionDigits: pricePrecision, maximumFractionDigits: pricePrecision });
+
+  const set = (key: string, text: string) => {
+    const el = legend.querySelector<HTMLElement>(`[data-k="${key}"]`);
+    if (el) el.textContent = text;
+  };
+  set('time', formatLegendTime(bar.time as number));
+  set('open', price(bar.open));
+  set('high', price(bar.high));
+  set('low', price(bar.low));
+  set('close', price(bar.close));
+  set('change', formatSignedPct(pct));
+  set('volume', vol && 'value' in vol ? `${formatVolume(vol.value)} ${symbol}` : '-');
+  set('turnover', krw !== undefined ? formatTurnover(krw) : '-');
+  legend.dataset.dir = pct > 0 ? 'up' : pct < 0 ? 'down' : '';
+}
+
+function renderLatestLegend() {
+  if (!hovering && candleSeries) renderLegend(candleSeries.data().length - 1);
 }
 
 /** 사이트 차트 공통 모양 (기록 추이 차트도 같이 쓴다) */
@@ -334,6 +425,12 @@ export function initPriceChart() {
 
   onMarketColorsChange(recolor);
 
+  chart.subscribeCrosshairMove((param) => {
+    hovering = param.logical !== undefined && param.time !== undefined;
+    if (hovering) renderLegend(param.logical as number);
+    else renderLatestLegend();
+  });
+
   chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
     if (range && range.from < LOAD_OLDER_MARGIN) loadOlderCandles();
   });
@@ -345,6 +442,7 @@ export function initPriceChart() {
       interval = next;
       track('chart_interval', { interval, symbol });
       document.querySelectorAll('.interval-btn[data-interval]').forEach((b) => b.classList.toggle('active', b === btn));
+      renderMarkerButtons();
       resetCandles();
     });
   });

@@ -68,6 +68,17 @@ test('candleTimeOf buckets by UTC interval and shifts to KST for display', () =>
   assert.equal(candleTimeOf(ms, 900), Date.parse('2026-10-03T12:30:00Z') / 1000 + KST_OFFSET_SEC);
   // 일봉은 UTC 00:00 = KST 09:00 시작
   assert.equal(candleTimeOf(ms, 86400), Date.parse('2026-10-03T00:00:00Z') / 1000 + KST_OFFSET_SEC);
+  // 4시간봉도 UTC 00:00부터 4시간 단위
+  assert.equal(candleTimeOf(ms, 14400), Date.parse('2026-10-03T12:00:00Z') / 1000 + KST_OFFSET_SEC);
+});
+
+test('candleTimeOf: weekly candles start Monday UTC 00:00, monthly on the 1st', () => {
+  const sat = Date.parse('2026-10-03T12:34:56Z'); // 토요일
+  assert.equal(candleTimeOf(sat, 'week'), Date.parse('2026-09-28T00:00:00Z') / 1000 + KST_OFFSET_SEC);
+  const mon = Date.parse('2026-10-05T00:00:00Z'); // 월요일 시작 시각은 그 주에 속한다
+  assert.equal(candleTimeOf(mon, 'week'), mon / 1000 + KST_OFFSET_SEC);
+  assert.equal(candleTimeOf(Date.parse('2026-10-04T23:59:59Z'), 'week'), Date.parse('2026-09-28T00:00:00Z') / 1000 + KST_OFFSET_SEC);
+  assert.equal(candleTimeOf(sat, 'month'), Date.parse('2026-10-01T00:00:00Z') / 1000 + KST_OFFSET_SEC);
 });
 
 test('applyTick updates the current candle, opens a new one, ignores late ticks', () => {

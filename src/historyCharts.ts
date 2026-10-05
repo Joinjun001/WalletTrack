@@ -1,5 +1,6 @@
 /**
  * 기록 추이 탭: 서버에 쌓인 코인별 김치 프리미엄, 바이낸스 선물 지표(펀딩비·미결제약정·롱 비율) 추이 차트
+ * 차트 위 정보 줄에 커서를 올린 지점(없으면 최신 값)의 시각과 값을 보여 준다.
  */
 
 import { createChart, BaselineSeries, LineSeries } from 'lightweight-charts';
@@ -13,7 +14,11 @@ import { track } from './analytics.ts';
 import { marketColors, onMarketColorsChange, registerThemedChart } from './theme.ts';
 
 const REFRESH_MS = 60 * 1000;
-const LINE_COLOR = '#F7931A';
+
+/** 선 색은 사이트 강조색(style.css의 --accent)을 따른다 */
+function lineColor(): string {
+  return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+}
 
 interface Point {
   t: number; // ms
@@ -48,6 +53,9 @@ class HistoryChart {
   private seriesKey = '';
   private status: HTMLElement | null;
   private requestId = 0;
+  private legend: HTMLElement;
+  private format: (v: number) => string = String;
+  private hovering = false;
 
   constructor(container: HTMLElement, statusId: string) {
     this.chart = createChart(container, {
@@ -56,9 +64,39 @@ class HistoryChart {
     });
     registerThemedChart(this.chart);
     onMarketColorsChange(() => {
-      if (this.series && this.seriesKey.startsWith('baseline')) this.series.applyOptions(baselineColors());
+      if (!this.series) return;
+      this.series.applyOptions(this.seriesKey.startsWith('baseline') ? baselineColors() : { color: lineColor() });
     });
     this.status = document.getElementById(statusId);
+
+    this.legend = document.createElement('div');
+    this.legend.className = 'chart-legend';
+    this.legend.hidden = true;
+    container.before(this.legend);
+    this.chart.subscribeCrosshairMove((param) => {
+      this.hovering = param.logical !== undefined && param.time !== undefined;
+      this.renderLegend(this.hovering ? (param.logical as number) : undefined);
+    });
+  }
+
+  /** index가 없으면 최신 값 */
+  private renderLegend(index?: number) {
+    const data = this.series?.data();
+    const point = data && data[index ?? data.length - 1];
+    if (!point || !('value' in point)) {
+      this.legend.hidden = true;
+      return;
+    }
+    this.legend.hidden = false;
+    const d = new Date((point.time as number) * 1000); // 이미 KST로 밀어 둔 시각
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const time = `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+    const timeEl = document.createElement('span');
+    timeEl.className = 'legend-time';
+    timeEl.textContent = time;
+    const valueEl = document.createElement('b');
+    valueEl.textContent = this.format(point.value);
+    this.legend.replaceChildren(timeEl, valueEl);
   }
 
   private ensureSeries(metric: Metric) {
@@ -76,7 +114,7 @@ class HistoryChart {
           lineWidth: 2,
           priceFormat
         })
-      : this.chart.addSeries(LineSeries, { color: LINE_COLOR, lineWidth: 2, priceFormat });
+      : this.chart.addSeries(LineSeries, { color: lineColor(), lineWidth: 2, priceFormat });
     this.seriesKey = key;
     return this.series;
   }
@@ -95,6 +133,8 @@ class HistoryChart {
     const series = this.ensureSeries(metric);
     series.setData(points.map((p) => ({ time: (Math.floor(p.t / 1000) + KST_OFFSET_SEC) as UTCTimestamp, value: p.value })));
     if (fit) this.chart.timeScale().fitContent();
+    this.format = metric.format;
+    if (!this.hovering) this.renderLegend();
 
     if (points.length === 0) {
       this.setStatus('이 기간에 쌓인 기록이 아직 없어요');

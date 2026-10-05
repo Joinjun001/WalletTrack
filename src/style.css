@@ -1,5 +1,10 @@
 :root {
-  --btc-gold: #F7931A;
+  --btc-gold: #F7931A; /* 비트코인 브랜드 표시에만 (BTC/KRW 라벨 등) */
+  /* 강조색: 선택된 버튼·포커스·진행 바. 하락 파랑(--down)과 구분되는 인디고 */
+  --accent: #7B8CFF;
+  --accent-rgb: 123, 140, 255;
+  --accent-hover: #97A4FF;
+  --on-accent: #0B1020;
   --bg-dark: #07090E;
   --panel-bg: rgba(14, 19, 31, 0.85);
   --panel-border: rgba(255, 255, 255, 0.08);
@@ -17,7 +22,7 @@
   --input-bg: rgba(0, 0, 0, 0.3);
   --dialog-bg: #0E131F;
   --panel-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-  --glow: rgba(247, 147, 26, 0.12);
+  --glow: rgba(var(--accent-rgb), 0.12);
   color-scheme: dark;
 }
 
@@ -36,7 +41,11 @@
   --input-bg: #FFFFFF;
   --dialog-bg: #FFFFFF;
   --panel-shadow: 0 4px 20px rgba(15, 23, 42, 0.06);
-  --glow: rgba(247, 147, 26, 0.10);
+  --accent: #4F5BD5;
+  --accent-rgb: 79, 91, 213;
+  --accent-hover: #3F4AC0;
+  --on-accent: #FFFFFF;
+  --glow: rgba(var(--accent-rgb), 0.10);
   color-scheme: light;
 }
 
@@ -123,8 +132,8 @@ body {
   gap: 1.5rem;
   padding: 1rem 1.75rem;
   margin-bottom: 1.25rem;
-  border-color: rgba(247, 147, 26, 0.3);
-  background: linear-gradient(180deg, rgba(247, 147, 26, 0.06) 0%, var(--panel-bg) 100%);
+  border-color: rgba(var(--accent-rgb), 0.3);
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.06) 0%, var(--panel-bg) 100%);
   position: relative;
   padding-right: 6.25rem;
 }
@@ -144,7 +153,7 @@ body {
   transition: border-color 0.2s ease;
 }
 
-.theme-toggle:hover { border-color: var(--btc-gold); }
+.theme-toggle:hover { border-color: var(--accent); }
 
 /* 상승·하락 색 전환 (테마 버튼 왼쪽) */
 .color-toggle {
@@ -177,7 +186,7 @@ body {
   font-weight: 900;
   font-family: var(--font-mono);
   color: var(--text-strong);
-  text-shadow: 0 0 25px rgba(247, 147, 26, 0.4);
+  text-shadow: 0 0 25px rgba(var(--accent-rgb), 0.4);
   letter-spacing: -1px;
   transition: color 0.3s ease, text-shadow 0.3s ease, transform 0.15s ease;
 }
@@ -285,7 +294,7 @@ body {
   font-family: var(--font-mono);
   font-size: 1.6rem;
   font-weight: 800;
-  color: var(--btc-gold);
+  color: var(--text-strong);
   line-height: 1.2;
 }
 
@@ -359,15 +368,15 @@ body {
 }
 
 .threshold-btn.active, .threshold-btn:hover {
-  background: rgba(247, 147, 26, 0.2);
-  border-color: var(--btc-gold);
+  background: rgba(var(--accent-rgb), 0.2);
+  border-color: var(--accent);
   color: var(--text-strong);
 }
 
 .threshold-btn.whale-filter.active {
-  background: rgba(247, 147, 26, 0.35);
-  border-color: var(--btc-gold);
-  box-shadow: 0 0 12px rgba(247, 147, 26, 0.4);
+  background: rgba(var(--accent-rgb), 0.35);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px rgba(var(--accent-rgb), 0.4);
 }
 
 .control-right {
@@ -391,7 +400,7 @@ body {
 }
 
 .vol-label strong {
-  color: var(--btc-gold);
+  color: var(--text-strong);
   font-family: var(--font-mono);
 }
 
@@ -570,8 +579,8 @@ body {
 .loading-spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid rgba(247, 147, 26, 0.2);
-  border-top-color: var(--btc-gold);
+  border: 3px solid rgba(var(--accent-rgb), 0.2);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin: 0 auto 1rem;
@@ -625,8 +634,8 @@ body {
 .interval-btn.active, .interval-btn:hover,
 .tab-btn.active, .tab-btn:hover,
 .alert-add-btn:hover {
-  background: rgba(247, 147, 26, 0.2);
-  border-color: var(--btc-gold);
+  background: rgba(var(--accent-rgb), 0.2);
+  border-color: var(--accent);
   color: var(--text-strong);
 }
 
@@ -685,7 +694,7 @@ body {
 }
 
 .coin-table tbody tr:hover { background: var(--line-faint); }
-.coin-table tbody tr.selected { background: rgba(247, 147, 26, 0.1); }
+.coin-table tbody tr.selected { background: rgba(var(--accent-rgb), 0.1); }
 
 .coin-name-cell strong { font-weight: 700; margin-right: 0.4rem; }
 .coin-name-cell span { font-size: 0.75rem; color: var(--text-muted); }
@@ -812,7 +821,7 @@ body {
 
 .calc-row input:focus, .alert-form input:focus {
   outline: none;
-  border-color: var(--btc-gold);
+  border-color: var(--accent);
 }
 
 .alert-form {
@@ -869,7 +878,7 @@ body {
 .toast {
   padding: 0.8rem 1.1rem;
   font-weight: 700;
-  border-color: var(--btc-gold);
+  border-color: var(--accent);
   animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -952,7 +961,7 @@ body {
   padding: 0.25rem 0.4rem;
 }
 
-.history-select:focus { outline: none; border-color: var(--btc-gold); }
+.history-select:focus { outline: none; border-color: var(--accent); }
 .metric-group { margin-bottom: 0.5rem; }
 
 /* Difficulty progress */
@@ -967,7 +976,7 @@ body {
 .progress-fill {
   height: 100%;
   width: 0;
-  background: var(--btc-gold);
+  background: var(--accent);
   transition: width 0.4s ease;
 }
 
@@ -984,11 +993,11 @@ body {
   padding: 0.4rem 0.5rem;
 }
 
-.whale-alert-row select:focus { outline: none; border-color: var(--btc-gold); }
+.whale-alert-row select:focus { outline: none; border-color: var(--accent); }
 
 .sound-test-btn { width: 100%; margin-top: 0.25rem; }
 .sound-card .calc-row { grid-template-columns: 3rem 1fr; }
-.sound-card input[type="range"] { padding: 0; border: none; background: none; accent-color: var(--btc-gold); }
+.sound-card input[type="range"] { padding: 0; border: none; background: none; accent-color: var(--accent); }
 
 /* 처음 들어왔을 때 사운드 알림을 켤지 묻는 안내 (화면 아래) */
 .sound-prompt {
@@ -1002,7 +1011,7 @@ body {
   align-items: center;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  border-color: rgba(247, 147, 26, 0.45);
+  border-color: rgba(var(--accent-rgb), 0.45);
   animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -1011,12 +1020,12 @@ body {
 .sound-prompt-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
 
 .sound-prompt-allow {
-  background: var(--btc-gold);
-  border-color: var(--btc-gold);
-  color: #111;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
 }
 
-.sound-prompt-allow:hover { background: #FFA834; color: #111; }
+.sound-prompt-allow:hover { background: var(--accent-hover); color: var(--on-accent); }
 
 @keyframes slideUp {
   from { opacity: 0; transform: translate(-50%, 12px); }
@@ -1088,7 +1097,7 @@ body {
   padding: 0.6rem;
 }
 
-.feedback-form textarea:focus { outline: none; border-color: var(--btc-gold); }
+.feedback-form textarea:focus { outline: none; border-color: var(--accent); }
 
 .feedback-foot {
   display: flex;
@@ -1184,8 +1193,8 @@ body {
 }
 
 .help-btn:hover, .help-btn[aria-expanded="true"] {
-  border-color: var(--btc-gold);
-  color: var(--btc-gold);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .help-popover {
@@ -1225,7 +1234,7 @@ body {
   padding: 0.45rem 0.6rem;
 }
 
-.coin-search:focus { outline: none; border-color: var(--btc-gold); }
+.coin-search:focus { outline: none; border-color: var(--accent); }
 
 .coin-sort {
   display: grid;
@@ -1253,7 +1262,7 @@ body {
 }
 
 .coin-row:hover { background: var(--line-faint); }
-.coin-row.selected { background: rgba(247, 147, 26, 0.12); }
+.coin-row.selected { background: rgba(var(--accent-rgb), 0.12); }
 
 /* 오늘 일봉 미니 캔들: 꼬리 = 저가~고가, 몸통 = 시가~현재가, 위아래 끝 = 시가 ±15% */
 .mini-candle {
@@ -1402,8 +1411,8 @@ body {
   margin-left: 0.25rem;
   padding: 0 0.3rem;
   border-radius: 999px;
-  background: var(--btc-gold);
-  color: #111;
+  background: var(--accent);
+  color: var(--on-accent);
   font-size: 0.7rem;
   font-weight: 800;
   line-height: 1.2rem;
@@ -1462,3 +1471,29 @@ body {
   .futures-strip { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
   .futures-strip .strip-item { border-left: none; }
 }
+
+/* 가격 차트 정보 줄: 커서를 올린 캔들 (없으면 최신 캔들) */
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.9rem;
+  min-height: 1.2rem;
+  margin-bottom: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.chart-legend[hidden] { display: none; }
+.chart-legend b { color: var(--text-main); font-weight: 600; }
+.chart-legend .legend-time { color: var(--text-main); }
+.chart-legend[data-dir="up"] .legend-change { color: var(--up); }
+.chart-legend[data-dir="down"] .legend-change { color: var(--down); }
+
+/* 가격 차트 정보 줄은 두 줄 높이로 고정 (커서를 옮길 때 줄 수가 바뀌어 차트가 흔들리지 않게) */
+#price-legend { min-height: 2.3rem; align-content: flex-start; }
+
+/* 캔들 간격 버튼이 많아서 조금 촘촘하게 */
+.candle-intervals { gap: 0.25rem; }
+.candle-intervals .interval-btn { padding: 0.25rem 0.45rem; }

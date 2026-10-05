@@ -4,7 +4,7 @@
  */
 
 const UPBIT_API = 'https://api.upbit.com/v1';
-const CANDLE_UNITS = new Set(['minutes/1', 'minutes/15', 'minutes/60', 'days']);
+const CANDLE_UNITS = new Set(['minutes/1', 'minutes/3', 'minutes/5', 'minutes/15', 'minutes/30', 'minutes/60', 'minutes/240', 'days', 'weeks', 'months']);
 const CANDLES_TTL_MS = 3_000;
 const TICKERS_TTL_MS = 3_000;
 const PAST_CANDLES_TTL_MS = 10 * 60_000; // to가 있으면 지난 캔들이라 바뀌지 않는다

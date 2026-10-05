@@ -115,10 +115,26 @@ export interface Candle {
 /** 차트 라이브러리는 UTC로 표시하므로, 한국 시간으로 보이게 시각을 9시간 민다 */
 export const KST_OFFSET_SEC = 9 * 3600;
 
-/** 체결 시각(ms)이 속한 캔들의 차트 시각. 업비트 분봉/일봉 모두 UTC 기준 구간이다 (일봉 = KST 09:00 시작). */
-export function candleTimeOf(tradeMs: number, intervalSec: number): number {
-  const sec = Math.floor(tradeMs / 1000);
-  return Math.floor(sec / intervalSec) * intervalSec + KST_OFFSET_SEC;
+/** 캔들 간격: 초 단위 고정 간격, 또는 길이가 일정하지 않은 주봉·월봉 */
+export type CandleInterval = number | 'week' | 'month';
+
+/**
+ * 체결 시각(ms)이 속한 캔들의 차트 시각. 업비트 캔들은 모두 UTC 기준 구간이다
+ * (일봉 = KST 09:00 시작, 주봉 = 월요일 UTC 00:00 시작, 월봉 = 1일 UTC 00:00 시작).
+ */
+export function candleTimeOf(tradeMs: number, interval: CandleInterval): number {
+  let start: number;
+  if (interval === 'week') {
+    const day = Math.floor(tradeMs / 86_400_000); // 1970-01-01은 목요일 → 월요일까지 3일
+    start = (day - ((day + 3) % 7)) * 86400;
+  } else if (interval === 'month') {
+    const d = new Date(tradeMs);
+    start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) / 1000;
+  } else {
+    const sec = Math.floor(tradeMs / 1000);
+    start = Math.floor(sec / interval) * interval;
+  }
+  return start + KST_OFFSET_SEC;
 }
 
 /** 실시간 체결가를 마지막 캔들에 반영. 새 구간이면 새 캔들, 지난 구간의 늦은 체결은 무시(null). */

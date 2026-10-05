@@ -84,12 +84,28 @@
               <button type="button" class="interval-btn marker-btn" data-marker="liq" title="큰 강제청산 (바이낸스 선물, 이 코인)">💥 청산</button>
               <button type="button" class="interval-btn marker-btn" data-marker="whale" title="온체인 거래소 입금·출금 (비트코인)">⛓️ 입출금</button>
             </div>
-            <div class="interval-group">
+            <div class="interval-group candle-intervals" role="group" aria-label="캔들 간격">
               <button class="interval-btn" data-interval="1m">1분</button>
+              <button class="interval-btn" data-interval="3m">3분</button>
+              <button class="interval-btn" data-interval="5m">5분</button>
               <button class="interval-btn active" data-interval="15m">15분</button>
+              <button class="interval-btn" data-interval="30m">30분</button>
               <button class="interval-btn" data-interval="1h">1시간</button>
+              <button class="interval-btn" data-interval="4h">4시간</button>
               <button class="interval-btn" data-interval="1d">일</button>
+              <button class="interval-btn" data-interval="1w">주</button>
+              <button class="interval-btn" data-interval="1M">월</button>
             </div>
+          </div>
+          <div id="price-legend" class="chart-legend" hidden>
+            <span class="legend-time" data-k="time"></span>
+            <span>시가 <b data-k="open"></b></span>
+            <span>고가 <b data-k="high"></b></span>
+            <span>저가 <b data-k="low"></b></span>
+            <span>종가 <b data-k="close"></b></span>
+            <b class="legend-change" data-k="change"></b>
+            <span>거래량 <b data-k="volume"></b></span>
+            <span>거래대금 <b data-k="turnover"></b></span>
           </div>
           <div id="price-chart" class="price-chart"></div>
           <p id="price-chart-status" class="table-note" hidden>차트를 불러오지 못했어요. 잠시 후 다시 시도할게요.</p>
