@@ -31,6 +31,7 @@
 3. `npm run screenshots`로 `image/` 스크린샷을 다시 찍는다.
 4. `README.md`의 기능 설명과 프로젝트 구조를 현재 화면에 맞게 고친다. 서버 API를 바꿨으면 `server/README.md`의 API 표도.
 5. 초보자가 모를 용어가 새로 나오면 `src/help.ts`에 설명을 넣고 제목에 `data-help`를 붙인다.
+6. 화면에 이모지를 쓰지 않는다. 아이콘은 `index.html`의 SVG 묶음(`#i-이름`)에 같은 선 굵기로 추가하고 `src/icons.ts`의 `icon()`으로 쓴다. 강조색은 `--accent`(인디고) 하나만 쓴다.
 
 ## 개발 전에 계획부터 확인받는다
 

@@ -1,5 +1,4 @@
 :root {
-  --btc-gold: #F7931A; /* 비트코인 브랜드 표시에만 (BTC/KRW 라벨 등) */
   /* 강조색: 선택된 버튼·포커스·진행 바. 하락 파랑(--down)과 구분되는 인디고 */
   --accent: #7B8CFF;
   --accent-rgb: 123, 140, 255;
@@ -158,6 +157,10 @@ body {
   line-height: 1;
   cursor: pointer;
   transition: border-color 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-main);
 }
 
 .theme-toggle:hover { border-color: var(--accent); }
@@ -182,7 +185,7 @@ body {
 .price-label {
   font-size: 0.85rem;
   font-weight: 800;
-  color: var(--btc-gold);
+  color: var(--accent);
   letter-spacing: 2px;
   text-transform: uppercase;
   display: inline-block;
@@ -284,8 +287,8 @@ body {
 
 .info-title {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  gap: 0.4rem;
+  align-items: center;
   font-size: 0.9rem;
   font-weight: 800;
   margin-bottom: 0.6rem;
@@ -499,10 +502,10 @@ body {
 .exchange-badge {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  color: #FFFFFF;
+  gap: 0.4rem;
+  background: var(--surface-1);
+  border: 1px solid var(--line-strong);
+  color: var(--text-main);
   font-size: 0.85rem;
   font-weight: 800;
   padding: 0.25rem 0.65rem;
@@ -512,8 +515,8 @@ body {
 
 /* Whale Alert Glow */
 .live-tx-card.whale-alert {
-  border: 2px solid #FFD700 !important;
-  box-shadow: 0 0 30px rgba(255, 215, 0, 0.6) !important;
+  border: 1px solid var(--accent) !important;
+  box-shadow: 0 0 18px rgba(var(--accent-rgb), 0.35) !important;
 }
 
 .tx-left {
@@ -537,9 +540,12 @@ body {
 }
 
 .whale-badge {
-  background: rgba(0, 0, 0, 0.5);
-  color: #FFD700;
-  border: 1px solid #FFD700;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(var(--accent-rgb), 0.15);
+  color: var(--accent);
+  border: 1px solid rgba(var(--accent-rgb), 0.5);
   font-size: 0.75rem;
   font-weight: 800;
   padding: 0.2rem 0.5rem;
@@ -786,7 +792,7 @@ body {
 
 .liq-item.long { background: rgba(var(--down-rgb), 0.12); border-left: 3px solid var(--down); }
 .liq-item.short { background: rgba(var(--up-rgb), 0.1); border-left: 3px solid var(--up); }
-.liq-item.big { box-shadow: 0 0 16px rgba(255, 215, 0, 0.35); border-left-color: #FFD700; }
+.liq-item.big { box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.3); border-left-color: var(--accent); }
 
 .liq-symbol { font-weight: 800; }
 .liq-item.long .liq-side { color: var(--down); }
@@ -1347,7 +1353,7 @@ body {
 
 .coin-search-row .coin-search { flex: 1; min-width: 0; margin: 0; }
 .coin-fav-filter { flex-shrink: 0; width: 2.1rem; padding: 0; font-size: 0.95rem; }
-.coin-fav-filter.active { color: #FFC107; }
+.coin-fav-filter.active { color: var(--accent); }
 
 .coin-sort { grid-template-columns: 1.3fr 1fr 1fr 1fr; }
 .coin-sort .interval-btn { padding: 0.25rem 0.2rem; white-space: nowrap; }
@@ -1367,14 +1373,14 @@ body {
 }
 
 .coin-fav:hover, .coin-fav.on { opacity: 1; }
-.coin-fav.on { color: #FFC107; }
+.coin-fav.on { color: var(--accent); }
 
 /* 상단 바: 김프가 어느 코인 기준인지 */
 .stat-coin {
   margin-left: 0.15rem;
   font-family: var(--font-mono);
   font-size: 0.68rem;
-  color: var(--btc-gold);
+  color: var(--accent);
 }
 
 /* 차트 위 청산·고래 표시 켜고 끄기 */
@@ -1398,7 +1404,7 @@ body {
 
 .big-item.buy { background: rgba(var(--up-rgb), 0.1); border-left: 3px solid var(--up); }
 .big-item.sell { background: rgba(var(--down-rgb), 0.12); border-left: 3px solid var(--down); }
-.big-item.whale { box-shadow: 0 0 16px rgba(255, 215, 0, 0.35); border-left-color: #FFD700; }
+.big-item.whale { box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.3); border-left-color: var(--accent); }
 .big-item:hover { outline: 1px solid var(--line-strong); }
 .big-side { font-weight: 800; }
 .big-item.buy .big-side { color: var(--up); }
@@ -1529,3 +1535,37 @@ body {
 .marker-tip[hidden] { display: none; }
 .marker-tip strong { font-size: 0.95rem; font-weight: 800; color: var(--text-strong); }
 .marker-tip span { font-size: 0.72rem; color: var(--text-muted); }
+
+/* 선 아이콘 (index.html SVG 묶음, src/icons.ts). 글자 크기를 따라가고 글자색으로 그린다 */
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.icon {
+  width: 1.1em;
+  height: 1.1em;
+  flex-shrink: 0;
+  vertical-align: -0.2em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.info-title .icon, .chart-title .icon { color: var(--accent); }
+/* 제목 오른쪽 보조 설명은 오른쪽 끝으로 */
+.info-title > .info-unit { margin-left: auto; }
+
+/* 상단 왼쪽 브랜드 (고래 로고 + 이름) */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-right: 0.65rem;
+  margin-right: 0.15rem;
+  border-right: 1px solid var(--line-strong);
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-main);
+}
+.brand-logo { width: 1.5rem; height: 1.5rem; }
+
+/* 온체인 카드 거래소 표시: 거래소 색 점 + 이름 */
+.exchange-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; flex-shrink: 0; }

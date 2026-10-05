@@ -6,6 +6,7 @@
 
 import type { DeepPartial, IChartApi, TimeChartOptions } from 'lightweight-charts';
 import { track } from './analytics.ts';
+import { icon } from './icons.ts';
 
 export type Theme = 'dark' | 'light';
 export type ColorScheme = 'kr' | 'global';
@@ -87,7 +88,7 @@ function applyThemeNow(theme: Theme) {
   document.documentElement.dataset.theme = theme;
   const button = document.getElementById('theme-toggle');
   if (button) {
-    button.textContent = theme === 'light' ? '🌙' : '☀️';
+    button.innerHTML = icon(theme === 'light' ? 'moon' : 'sun');
     button.setAttribute('aria-label', theme === 'light' ? '다크 모드로 바꾸기' : '라이트 모드로 바꾸기');
     button.title = button.getAttribute('aria-label') || '';
   }

@@ -71,7 +71,7 @@ const HELP: Record<string, { title: string; body: string }> = {
   },
   soundAlerts: {
     title: '사운드 알림',
-    body: '비트코인만 들어요. 청산은 바이낸스·바이비트·OKX의 BTC 강제청산, 체결은 🐋 대형 체결 탭과 같은 데이터(5개 마켓)예요. 롱 청산·매도는 내려가는 음, 숏 청산·매수는 올라가는 음이고, 금액이 클수록 더 크게 여러 번 울려요.'
+    body: '비트코인만 들어요. 청산은 바이낸스·바이비트·OKX의 BTC 강제청산, 체결은 대형 체결 탭과 같은 데이터(5개 마켓)예요. 롱 청산·매도는 내려가는 음, 숏 청산·매수는 올라가는 음이고, 금액이 클수록 더 크게 여러 번 울려요.'
   },
   surge: {
     title: '급등·급락 포착',
@@ -79,7 +79,7 @@ const HELP: Record<string, { title: string; body: string }> = {
   },
   chartMarkers: {
     title: '차트 표시 (청산·입출금)',
-    body: '캔들마다 바이낸스 선물에서 이 코인이 강제청산된 금액을 합쳐 큰 것만 보여 줘요. 롱청산은 캔들 아래, 숏청산은 위에 찍혀요. ⛓️ 입출금은 비트코인 차트에서 알려진 거래소 지갑으로 들어간(입금)·나간(출금) 큰 온체인 송금이에요. 기록 서버가 모은 기간만 보여요.'
+    body: '캔들마다 바이낸스 선물에서 이 코인이 강제청산된 금액을 합쳐 큰 것만 보여 줘요. 롱청산은 캔들 아래, 숏청산은 위에 찍혀요. 입출금은 비트코인 차트에서 알려진 거래소 지갑으로 들어간(입금)·나간(출금) 큰 온체인 송금이에요. 기록 서버가 모은 기간만 보여요.'
   },
   mempool: {
     title: '대기 중 거래 (멤풀)',
@@ -141,15 +141,20 @@ function attachButton(elem: HTMLElement, key: string) {
     else open(button, key);
   });
 
+  // 제목 앞의 아이콘과 글자를 ? 버튼과 한 묶음으로
   const label = document.createElement('span');
   label.className = 'help-label';
   const first = elem.firstChild;
-  if (first?.nodeType === Node.TEXT_NODE) {
-    label.textContent = (first.textContent || '').trim();
-    first.replaceWith(label);
-  } else {
-    elem.prepend(label);
+  if (first instanceof SVGElement && first.classList.contains('icon')) {
+    label.append(first);
+    first.after(' ');
   }
+  const text = elem.firstChild;
+  if (text?.nodeType === Node.TEXT_NODE) {
+    label.append((text.textContent || '').trim());
+    text.remove();
+  }
+  elem.prepend(label);
   label.append(button);
 }
 

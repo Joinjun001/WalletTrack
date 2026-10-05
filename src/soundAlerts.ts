@@ -1,6 +1,6 @@
 /**
  * 사운드 알림: 비트코인 강제청산(바이낸스·바이비트·OKX)과 대형 체결(바이낸스 선물·현물, 바이비트, OKX, 업비트)이 나면 소리로 알린다.
- * 데이터는 btcStreams.ts가 모아 준다. 대형 체결은 🐋 대형 체결 피드와 같은 데이터라 소리가 나면 피드에서 확인할 수 있다.
+ * 데이터는 btcStreams.ts가 모아 준다. 대형 체결은 대형 체결 피드와 같은 데이터라 소리가 나면 피드에서 확인할 수 있다.
  * 소리는 8비트 아르페지오(sounds.ts)이고 볼륨을 정할 수 있다. 롱 청산·매도는 내려가는 음, 숏 청산·매수는 올라가는 음.
  * 청산은 금액이 클수록($100K / $500K / $2M) 단계가 올라가 더 크고 낮게, 여러 번 울린다. 체결은 기준 대비 배수로 단계를 정한다.
  */
@@ -141,7 +141,7 @@ function playTierPreview() {
   ([1, 2, 3, 4] as SoundTier[]).forEach((tier, i) => {
     previewTimers.push(window.setTimeout(() => {
       playNow(false, tier);
-      if (note) note.textContent = `🔊 롱 청산 ${labels[i]}`;
+      if (note) note.textContent = `롱 청산 ${labels[i]}`;
     }, delay));
     delay += [500, 700, 1300, 0][i];
   });
@@ -193,8 +193,8 @@ function renderPrompt() {
   const allow = document.getElementById('sound-prompt-allow');
   const dismiss = document.getElementById('sound-prompt-dismiss');
   if (text) text.textContent = mode === 'ask'
-    ? '🔊 비트코인 큰 청산이나 대형 체결이 나면 소리로 알려드릴까요?'
-    : '🔊 사운드 알림이 켜져 있어요. 소리를 들으려면 눌러 주세요';
+    ? '비트코인 큰 청산이나 대형 체결이 나면 소리로 알려드릴까요?'
+    : '사운드 알림이 켜져 있어요. 소리를 들으려면 눌러 주세요';
   if (allow) allow.textContent = '소리 켜기';
   if (dismiss) dismiss.textContent = mode === 'ask' ? '괜찮아요' : '알림 끄기';
 }

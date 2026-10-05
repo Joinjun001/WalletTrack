@@ -1,5 +1,5 @@
 /**
- * README 스크린샷 갱신: 빌드된 사이트(dist)를 미리보기로 띄우고 데스크톱(다크·라이트)과 모바일 화면을 image/에 저장한다.
+ * README 스크린샷 갱신: 빌드된 사이트(dist)를 미리보기로 띄우고 데스크톱(다크·라이트)과 모바일 화면, README 배너(scripts/banner.html)를 image/에 저장한다.
  * 실행: npm run screenshots  (처음 한 번은 npx playwright install chromium 필요)
  *
  * 화면은 실제 거래소·기록 서버 데이터로 채워지므로 숫자는 찍을 때마다 다르다.
@@ -44,6 +44,14 @@ try {
     await page.close();
     console.log(`저장: ${shot.file}`);
   }
+  // README 배너 (scripts/banner.html)
+  const banner = await browser.newPage({ viewport: { width: 1280, height: 360 }, deviceScaleFactor: 2 });
+  await banner.goto(import.meta.resolve('./banner.html'));
+  await banner.waitForTimeout(1500); // 글꼴
+  await banner.screenshot({ path: 'image/banner.png' });
+  await banner.close();
+  console.log('저장: image/banner.png');
+
   await browser.close();
 } finally {
   process.kill(-preview.pid);

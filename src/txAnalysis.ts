@@ -56,15 +56,15 @@ export interface TxAnalysis {
 // Known exchange wallets. 주소 체크섬은 검증했지만 소유 주체는 공개 라벨 기준이라 틀릴 수 있다.
 export const KNOWN_EXCHANGES: Record<string, ExchangeWallet> = {
   // Binance
-  '34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo': { address: '34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo', name: 'Binance Cold #1', icon: '🟡 Binance', color: '#F3BA2F' },
-  '1NDyJtNTjmwk5xPNhjgAMu4HDHigtobu1s': { address: '1NDyJtNTjmwk5xPNhjgAMu4HDHigtobu1s', name: 'Binance Hot Wallet', icon: '🟡 Binance', color: '#F3BA2F' },
-  'bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h': { address: 'bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h', name: 'Binance Reserve', icon: '🟡 Binance', color: '#F3BA2F' },
+  '34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo': { address: '34xp4vRoCGJym3xR7yCVPFHoCNxv4Twseo', name: 'Binance Cold #1', icon: 'Binance', color: '#F3BA2F' },
+  '1NDyJtNTjmwk5xPNhjgAMu4HDHigtobu1s': { address: '1NDyJtNTjmwk5xPNhjgAMu4HDHigtobu1s', name: 'Binance Hot Wallet', icon: 'Binance', color: '#F3BA2F' },
+  'bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h': { address: 'bc1qm34lsc65zpw79lxes69zkqmk6ee3ewf0j77s3h', name: 'Binance Reserve', icon: 'Binance', color: '#F3BA2F' },
 
   // Bitfinex
-  'bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97': { address: 'bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97', name: 'Bitfinex Cold Wallet', icon: '🟩 Bitfinex', color: '#00C684' },
+  'bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97': { address: 'bc1qgdjqv0av3q56jvd82tkdjpy7gdp9ut8tlqmgrpmv24sq90ecnvqqjwvw97', name: 'Bitfinex Cold Wallet', icon: 'Bitfinex', color: '#00C684' },
 
   // Coinbase
-  '1P5ZEDWTKTFGxQjZphgWPQUpe554WKDfHQ': { address: '1P5ZEDWTKTFGxQjZphgWPQUpe554WKDfHQ', name: 'Coinbase Prime', icon: '🔵 Coinbase', color: '#0052FF' }
+  '1P5ZEDWTKTFGxQjZphgWPQUpe554WKDfHQ': { address: '1P5ZEDWTKTFGxQjZphgWPQUpe554WKDfHQ', name: 'Coinbase Prime', icon: 'Coinbase', color: '#0052FF' }
 };
 
 const SATS_PER_BTC = 1e8;

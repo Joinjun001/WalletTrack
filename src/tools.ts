@@ -103,7 +103,7 @@ function saveJson(key: string, value: unknown) {
 }
 
 function notify(title: string, message: string) {
-  showToast(`🔔 ${message}`);
+  showToast(message);
   if ('Notification' in window && Notification.permission === 'granted') new Notification(title, { body: message });
 }
 
@@ -242,7 +242,7 @@ function initWhaleAlert() {
     lastNotifiedAt = now;
     const krw = prices.krwBtc > 0 ? ` (약 ${formatKrw(t.btc * prices.krwBtc)})` : '';
     track('whale_alert_fired', { btc: threshold });
-    notify('고래 체결', `🐋 ${EXCHANGE_LABELS[t.exchange]} ${t.btc.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC ${t.side === 'buy' ? '매수' : '매도'}${krw}`);
+    notify('고래 체결', `${EXCHANGE_LABELS[t.exchange]} ${t.btc.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC ${t.side === 'buy' ? '매수' : '매도'}${krw}`);
   });
 }
 

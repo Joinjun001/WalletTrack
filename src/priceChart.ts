@@ -86,7 +86,7 @@ let hovering = false;
 
 interface MarkerInfo {
   kind: MarkerKind;
-  title: string;  // 크게: "💥 숏 청산 $5.6M"
+  title: string;  // 크게: "숏 청산 $5.6M"
   detail: string;
 }
 const markerInfo = new Map<string, MarkerInfo>(); // 표시 id → 내용
@@ -175,11 +175,11 @@ function drawMarkers() {
   if (markerKinds.has('liq')) {
     // 롱 청산 = 강제 매도라 가격이 떨어질 때 나온다 → 캔들 아래, 하락 색
     for (const b of topByValue(markerData.liq, (x) => x.longUsd, MAX_LIQ_MARKERS, MIN_LIQ_USD)) {
-      add(b.t, { kind: 'liq', title: `💥 롱 청산 ${formatUsdShort(b.longUsd)}`, detail: '바이낸스 선물 · 이 캔들 동안 합계' },
+      add(b.t, { kind: 'liq', title: `롱 청산 ${formatUsdShort(b.longUsd)}`, detail: '바이낸스 선물 · 이 캔들 동안 합계' },
         { position: 'belowBar', shape: 'circle', color: down, text: `롱 ${formatUsdShort(b.longUsd)}` });
     }
     for (const b of topByValue(markerData.liq, (x) => x.shortUsd, MAX_LIQ_MARKERS, MIN_LIQ_USD)) {
-      add(b.t, { kind: 'liq', title: `💥 숏 청산 ${formatUsdShort(b.shortUsd)}`, detail: '바이낸스 선물 · 이 캔들 동안 합계' },
+      add(b.t, { kind: 'liq', title: `숏 청산 ${formatUsdShort(b.shortUsd)}`, detail: '바이낸스 선물 · 이 캔들 동안 합계' },
         { position: 'aboveBar', shape: 'circle', color: up, text: `숏 ${formatUsdShort(b.shortUsd)}` });
     }
   }
@@ -187,11 +187,11 @@ function drawMarkers() {
     const btc = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}₿`;
     const btcLong = (n: number) => `${Math.round(n).toLocaleString('ko-KR')} BTC`;
     for (const b of topByValue(markerData.whale, (x) => x.depositBtc, MAX_WHALE_MARKERS, MIN_WHALE_BTC)) {
-      add(b.t, { kind: 'whale', title: `⛓️ 거래소 입금 ${btcLong(b.depositBtc)}`, detail: '온체인 · 이 캔들 동안 합계 (팔려고 옮겼을 수 있어요)' },
+      add(b.t, { kind: 'whale', title: `거래소 입금 ${btcLong(b.depositBtc)}`, detail: '온체인 · 이 캔들 동안 합계 (팔려고 옮겼을 수 있어요)' },
         { position: 'aboveBar', shape: 'arrowDown', color: WHALE_DEPOSIT_COLOR, text: `입금 ${btc(b.depositBtc)}` });
     }
     for (const b of topByValue(markerData.whale, (x) => x.withdrawalBtc, MAX_WHALE_MARKERS, MIN_WHALE_BTC)) {
-      add(b.t, { kind: 'whale', title: `⛓️ 거래소 출금 ${btcLong(b.withdrawalBtc)}`, detail: '온체인 · 이 캔들 동안 합계 (보관하려고 뺐을 수 있어요)' },
+      add(b.t, { kind: 'whale', title: `거래소 출금 ${btcLong(b.withdrawalBtc)}`, detail: '온체인 · 이 캔들 동안 합계 (보관하려고 뺐을 수 있어요)' },
         { position: 'belowBar', shape: 'arrowUp', color: WHALE_WITHDRAWAL_COLOR, text: `출금 ${btc(b.withdrawalBtc)}` });
     }
   }

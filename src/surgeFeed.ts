@@ -16,6 +16,7 @@ import { setSelectedCoin } from './selectedCoin.ts';
 import { showToast } from './tools.ts';
 import { escapeHtml } from './txAnalysis.ts';
 import { track } from './analytics.ts';
+import { icon } from './icons.ts';
 
 const HISTORY_HOURS = 24;
 const MAX_ITEMS = 50;
@@ -89,7 +90,7 @@ function itemHtml(i: Item): string {
   const name = coinName(symbol);
   return `
     <li class="surge-item ${i.direction}" data-symbol="${escapeHtml(symbol)}" tabindex="0" role="button" aria-label="${escapeHtml(name)} 차트 보기">
-      <span class="surge-side">${i.direction === 'up' ? '🚀 급등' : '📉 급락'}</span>
+      <span class="surge-side">${i.direction === 'up' ? `${icon('trend-up')} 급등` : `${icon('trend-down')} 급락`}</span>
       <span class="surge-name"><strong>${escapeHtml(name)}</strong> <span>${escapeHtml(symbol)}</span></span>
       <span class="surge-pct">${formatSignedPct(i.pct)}</span>
       <span class="surge-price">${formatKrwPrice(i.price)} <span class="surge-vol">· ${formatKrwShort(i.volumeKrw)}</span></span>
@@ -136,7 +137,7 @@ function onSurge(e: SurgeEvent) {
     renderBadge();
   }
   const symbol = e.market.slice(4);
-  if (toastOn) showToast(`${e.direction === 'up' ? '🚀' : '📉'} ${coinName(symbol)}(${symbol}) 5분 ${formatSignedPct(e.pct)} ${e.direction === 'up' ? '급등' : '급락'}`);
+  if (toastOn) showToast(`${coinName(symbol)}(${symbol}) 5분 ${formatSignedPct(e.pct)} ${e.direction === 'up' ? '급등' : '급락'}`);
 }
 
 function renderControls() {
@@ -145,7 +146,7 @@ function renderControls() {
   if (toggle) {
     toggle.classList.toggle('active', toastOn);
     toggle.setAttribute('aria-pressed', String(toastOn));
-    toggle.textContent = toastOn ? '🔔 화면 알림 켬' : '🔕 화면 알림 끔';
+    toggle.innerHTML = toastOn ? `${icon('bell')} 화면 알림 켬` : `${icon('bell-off')} 화면 알림 끔`;
   }
 }
 

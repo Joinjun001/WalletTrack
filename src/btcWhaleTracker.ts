@@ -10,6 +10,7 @@ import { formatKrwShort, formatSignedPct } from './market.ts';
 import { getHistory } from './historyApi.ts';
 import { track, trackOnce } from './analytics.ts';
 import type { WhaleRecord } from './historyApi.ts';
+import { icon } from './icons.ts';
 
 export interface LiveBtcTransaction {
   id: string;
@@ -100,7 +101,7 @@ function connectPriceWebSocket() {
     priceWs = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
 
     priceWs.onopen = () => {
-      console.log('⚡ High-Speed Bitcoin Real-Time Price WebSocket Connected');
+      console.log('Bitcoin real-time price WebSocket connected');
       priceWsConnected = true;
     };
 
@@ -194,7 +195,7 @@ function toLiveTx(hash: string, btcAmount: number, direction: TxDirection, excha
     direction,
     timestamp,
     exchangeName: exchange ? exchange.name : '미확인 지갑',
-    exchangeIcon: exchange ? exchange.icon : '🏛️ Wallet',
+    exchangeIcon: exchange ? exchange.icon : 'Wallet',
     exchangeColor: exchange ? exchange.color : '#8A99AD',
     isKnownExchange: !!exchange,
     isWhale: btcAmount >= WHALE_BTC
@@ -214,7 +215,7 @@ function connectWebSocket(container: HTMLElement | null, countElem: HTMLElement 
     ws = new WebSocket(MEMPOOL_WS);
 
     ws.onopen = () => {
-      console.log('⚡ High-Speed Bitcoin Transaction WebSocket Connected');
+      console.log('Bitcoin transaction WebSocket connected');
       if (statusDot) statusDot.className = 'dot pulsing green';
 
       // 멤풀에 새로 들어온 거래를 받는다
@@ -278,9 +279,9 @@ function updateCounters(countElem: HTMLElement | null, totalVolElem: HTMLElement
 }
 
 const DIRECTION_TAGS: Record<TxDirection, string> = {
-  deposit: '<span class="tag deposit">📥 거래소 입금</span>',
-  withdrawal: '<span class="tag withdrawal">📤 거래소 출금</span>',
-  transfer: '<span class="tag transfer">↔️ 전송</span>'
+  deposit: `<span class="tag deposit">${icon('deposit')} 거래소 입금</span>`,
+  withdrawal: `<span class="tag withdrawal">${icon('withdraw')} 거래소 출금</span>`,
+  transfer: `<span class="tag transfer">${icon('transfer')} 전송</span>`
 };
 
 /** 1분 안이면 "방금 전", 그 외에는 감지 시각 (오늘이 아니면 날짜 포함) */
@@ -310,11 +311,11 @@ function prependItemToUi(container: HTMLElement | null, item: LiveBtcTransaction
   card.innerHTML = `
     <div class="tx-left">
       <div class="tx-type-row">
-        <span class="exchange-badge" style="border-color: ${escapeHtml(item.exchangeColor)};">
-          ${escapeHtml(item.exchangeIcon)}
+        <span class="exchange-badge">
+          <span class="exchange-dot" style="background: ${escapeHtml(item.exchangeColor)};"></span>${escapeHtml(item.exchangeIcon)}
         </span>
         ${DIRECTION_TAGS[item.direction]}
-        ${item.isWhale ? `<span class="whale-badge">🐋 WHALE!</span>` : ''}
+        ${item.isWhale ? `<span class="whale-badge">${icon('whale')} 고래</span>` : ''}
         <span class="tx-time-ago">${timeLabel(item.timestamp)}</span>
       </div>
       <div class="tx-hash-row">
