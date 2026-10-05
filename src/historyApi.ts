@@ -68,6 +68,17 @@ export interface WhaleFlow {
   withdrawalCount: number;
 }
 
+/** 대형 체결(1 BTC 이상) 기간 합계. since: 거래소별 기록 시작 시각(ms) */
+export interface BigTradeSummary {
+  hours: number;
+  buyBtc: number;
+  sellBtc: number;
+  buyCount: number;
+  sellCount: number;
+  since: Record<string, number>;
+  missingDays: Record<string, string[]>; // 아직 못 채운 날 (YYYY-MM-DD, UTC). 거래소가 다음 날 파일을 올리면 채워진다
+}
+
 export interface KimchiPoint {
   t: number; // ms
   premiumPct: number;

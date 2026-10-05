@@ -12,6 +12,7 @@
  * GET /api/futures?symbol=BTCUSDT&hours=24
  * GET /api/kimchi?symbol=BTC&hours=24
  * GET /api/surges?threshold=3&hours=24&limit=50                       업비트 원화 마켓 급등·급락 기록
+ * GET /api/big-trades/summary?hours=24                                대형 체결(1 BTC 이상) 매수·매도 합계와 거래소별 기록 시작 시각
  * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...], /api/upbit/tickers, /api/upbit/markets: 업비트 중계 (upbitProxy.ts)
  *
  * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts). config.postOrigins에서 보낸 것만 받는다
@@ -25,6 +26,7 @@ import { config, log } from './config.ts';
 import { query } from './db.ts';
 import { BadRequest, rateLimiter, saveEvents, saveFeedback } from './usage.ts';
 import { UpstreamError, upbitCandles, upbitMarkets, upbitTickers } from './upbitProxy.ts';
+import { FILE_URLS } from './bigTrades.ts';
 
 type Params = URLSearchParams;
 
@@ -47,6 +49,8 @@ function symbolParam(q: Params, fallback: string): string {
 }
 
 const MAX_BUCKETS = 5_000;
+const BIG_TRADE_CACHE_MS = 60_000;
+const bigTradeCache = new Map<number, { at: number; value: unknown }>();
 
 /** 캔들 구간 합계용: 기간 ÷ 구간이 너무 많으면 거절한다 (한 요청에 수만 행 계산 방지) */
 function bucketParams(q: Params, maxHours: number): { hours: number; minutes: number } {
@@ -235,6 +239,52 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
       volumeKrw: r.volume_krw,
       detectedAt: ms(r.detected_at)
     }));
+  },
+
+  // 1달이면 최대 수십만 행을 더하므로 기간별로 1분 동안 캐시한다
+  '/api/big-trades/summary': async (q) => {
+    const hours = Math.round(numParam(q, 'hours', 24, 1, 24 * 31));
+    const hit = bigTradeCache.get(hours);
+    if (hit && Date.now() - hit.at < BIG_TRADE_CACHE_MS) return hit.value;
+    const [sums, since, live, filled] = await Promise.all([
+      query<{ buy_btc: number | null; sell_btc: number | null; buy_count: number | null; sell_count: number | null }>(
+        `SELECT sum(buy_btc) AS buy_btc, sum(sell_btc) AS sell_btc, sum(buy_count)::int8 AS buy_count, sum(sell_count)::int8 AS sell_count
+         FROM big_trade_minutes WHERE minute > now() - $1::int * interval '1 hour'`,
+        [hours]
+      ),
+      query<{ exchange: string; since: Date }>(`SELECT exchange, min(minute) AS since FROM big_trade_minutes GROUP BY exchange`),
+      query<{ t: Date | null }>(`SELECT min(started_at) AS t FROM big_trade_live`),
+      query<{ source: string; day: string }>(
+        `SELECT source, to_char(day, 'YYYY-MM-DD') AS day FROM big_trade_filled WHERE day >= (now() - $1::int * interval '1 hour')::date`,
+        [hours]
+      )
+    ]);
+    const s = sums[0];
+    // 실시간 수집을 처음 시작하기 전인데 아직 파일로 못 채운 날 (거래소가 다음 날 파일을 올리면 채워진다)
+    const filledSet = new Set(filled.map((r) => `${r.source}|${r.day}`));
+    const DAY = 86_400_000;
+    const liveStart = live[0]?.t?.getTime() ?? Date.now();
+    const missingDays: Record<string, string[]> = {};
+    for (const source of Object.keys(FILE_URLS)) {
+      const first = since.find((r) => r.exchange === source)?.since.getTime() ?? Date.now();
+      const from = Math.floor(Math.max(Date.now() - hours * 3_600_000, first) / DAY) * DAY;
+      for (let d = from; d < liveStart; d += DAY) {
+        const day = new Date(d).toISOString().slice(0, 10);
+        if (!filledSet.has(`${source}|${day}`)) (missingDays[source] ??= []).push(day);
+      }
+    }
+    const value = {
+      hours,
+      buyBtc: s?.buy_btc ?? 0,
+      sellBtc: s?.sell_btc ?? 0,
+      buyCount: s?.buy_count ?? 0,
+      sellCount: s?.sell_count ?? 0,
+      since: Object.fromEntries(since.map((r) => [r.exchange, ms(r.since)])),
+      missingDays
+    };
+    if (bigTradeCache.size > 50) bigTradeCache.clear();
+    bigTradeCache.set(hours, { at: Date.now(), value });
+    return value;
   },
 
   '/api/upbit/candles': async (q) => upbitCandles(q),

@@ -58,6 +58,29 @@ CREATE TABLE IF NOT EXISTS surge_events (
 );
 CREATE INDEX IF NOT EXISTS surge_events_threshold_time ON surge_events (threshold, detected_at DESC);
 
+-- 대형 체결(1 BTC 이상, 주문 단위) 거래소·분별 합계 (bigTrades.ts). 고래 체결 탭의 하루·1주·1달 합계
+CREATE TABLE IF NOT EXISTS big_trade_minutes (
+  minute     timestamptz NOT NULL,
+  exchange   text NOT NULL,              -- src/exchangeFeeds.ts Exchange
+  buy_btc    double precision NOT NULL,  -- 시장가 매수
+  sell_btc   double precision NOT NULL,
+  buy_count  int NOT NULL,
+  sell_count int NOT NULL,
+  PRIMARY KEY (minute, exchange)
+);
+
+-- 실시간 수집을 시작한 시각 (수집기를 켤 때마다). 처음 시작 전인데 파일로 못 채운 날 = 비어 있는 날
+CREATE TABLE IF NOT EXISTS big_trade_live (
+  started_at timestamptz PRIMARY KEY
+);
+
+-- 거래소 과거 파일로 채운 날 (같은 날을 다시 받지 않게)
+CREATE TABLE IF NOT EXISTS big_trade_filled (
+  source text NOT NULL,
+  day    date NOT NULL,
+  PRIMARY KEY (source, day)
+);
+
 -- 웹 사용 기록 (익명). 브라우저마다 만든 무작위 ID만 쓰고 IP 등 개인정보는 저장하지 않는다
 CREATE TABLE IF NOT EXISTS usage_events (
   id         bigserial PRIMARY KEY,

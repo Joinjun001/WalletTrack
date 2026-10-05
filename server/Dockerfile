@@ -8,7 +8,7 @@ RUN echo '{"type":"module"}' > package.json
 COPY server/package.json server/package-lock.json server/
 RUN cd server && npm ci --omit=dev
 
-COPY src/txAnalysis.ts src/market.ts src/coins.ts src/surge.ts src/
+COPY src/txAnalysis.ts src/market.ts src/coins.ts src/surge.ts src/exchangeFeeds.ts src/bigTradeStats.ts src/
 COPY server/src server/src
 COPY server/db server/db
 

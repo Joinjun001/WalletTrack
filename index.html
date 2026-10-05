@@ -134,10 +134,19 @@
           </div>
 
           <div class="whale-flow glass-panel">
-            <span class="flow-title">최근 1시간 고래 체결 <span class="info-unit">1 BTC 이상 · 페이지를 연 뒤부터</span></span>
+            <div class="flow-head">
+              <span class="flow-title">고래 체결 합계 <span id="big-flow-unit" class="info-unit">1 BTC 이상 · 페이지를 연 뒤부터</span></span>
+              <div class="interval-group" role="group" aria-label="합계 기간">
+                <button type="button" class="interval-btn flow-period-btn active" data-flow-hours="1">1시간</button>
+                <button type="button" class="interval-btn flow-period-btn" data-flow-hours="24">하루</button>
+                <button type="button" class="interval-btn flow-period-btn" data-flow-hours="168">1주</button>
+                <button type="button" class="interval-btn flow-period-btn" data-flow-hours="720">1달</button>
+              </div>
+            </div>
             <span>매수 <strong id="big-buy" class="up">-</strong></span>
             <span>매도 <strong id="big-sell" class="down">-</strong></span>
             <span title="매수 - 매도. 양수면 큰손이 더 많이 샀어요">순매수 <strong id="big-net">-</strong></span>
+            <span id="big-flow-note" class="flow-note"></span>
           </div>
 
           <div class="glass-panel liq-card">

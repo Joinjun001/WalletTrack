@@ -84,6 +84,15 @@ let noMoreOlder = false;
 const turnover = new Map<number, number>(); // 캔들 시각 → 원화 거래대금 (정보 줄)
 let hovering = false;
 
+interface MarkerInfo {
+  kind: MarkerKind;
+  title: string;  // 크게: "💥 숏 청산 $5.6M"
+  detail: string;
+}
+const markerInfo = new Map<string, MarkerInfo>(); // 표시 id → 내용
+let hoveredMarker: string | null = null;
+let markerTip: HTMLElement | null = null;
+
 function toCandle(c: UpbitCandle): Candle {
   return {
     time: Date.parse(`${c.candle_date_time_utc}Z`) / 1000 + KST_OFFSET_SEC,
@@ -152,29 +161,68 @@ function drawMarkers() {
   const times = new Set(candleSeries.data().map((c) => c.time as number));
   const { up, down } = marketColors();
   const markers: SeriesMarker<Time>[] = [];
-  const add = (t: number, marker: Omit<SeriesMarker<Time>, 'time'>) => {
+  markerInfo.clear();
+  // 커서를 올린 표시는 크게, 나머지는 흐리게 (표시 글자를 따로 굵게 할 수는 없다)
+  const add = (t: number, info: MarkerInfo, marker: Omit<SeriesMarker<Time>, 'time' | 'id'>) => {
     const time = candleTimeOf(t, bucket);
-    if (times.has(time)) markers.push({ ...marker, time: time as UTCTimestamp } as SeriesMarker<Time>);
+    if (!times.has(time)) return;
+    const id = `${info.kind}|${time}|${marker.position}`;
+    markerInfo.set(id, info);
+    const hovered = hoveredMarker === id;
+    const color = hoveredMarker && !hovered ? fadeColor(marker.color) : marker.color;
+    markers.push({ ...marker, id, color, size: hovered ? 2 : 1, time: time as UTCTimestamp } as SeriesMarker<Time>);
   };
   if (markerKinds.has('liq')) {
     // 롱 청산 = 강제 매도라 가격이 떨어질 때 나온다 → 캔들 아래, 하락 색
     for (const b of topByValue(markerData.liq, (x) => x.longUsd, MAX_LIQ_MARKERS, MIN_LIQ_USD)) {
-      add(b.t, { position: 'belowBar', shape: 'circle', color: down, text: `롱 ${formatUsdShort(b.longUsd)}` });
+      add(b.t, { kind: 'liq', title: `💥 롱 청산 ${formatUsdShort(b.longUsd)}`, detail: '바이낸스 선물 · 이 캔들 동안 합계' },
+        { position: 'belowBar', shape: 'circle', color: down, text: `롱 ${formatUsdShort(b.longUsd)}` });
     }
     for (const b of topByValue(markerData.liq, (x) => x.shortUsd, MAX_LIQ_MARKERS, MIN_LIQ_USD)) {
-      add(b.t, { position: 'aboveBar', shape: 'circle', color: up, text: `숏 ${formatUsdShort(b.shortUsd)}` });
+      add(b.t, { kind: 'liq', title: `💥 숏 청산 ${formatUsdShort(b.shortUsd)}`, detail: '바이낸스 선물 · 이 캔들 동안 합계' },
+        { position: 'aboveBar', shape: 'circle', color: up, text: `숏 ${formatUsdShort(b.shortUsd)}` });
     }
   }
   if (markerKinds.has('whale') && symbol === 'BTC') {
     const btc = (n: number) => `${Math.round(n).toLocaleString('ko-KR')}₿`;
+    const btcLong = (n: number) => `${Math.round(n).toLocaleString('ko-KR')} BTC`;
     for (const b of topByValue(markerData.whale, (x) => x.depositBtc, MAX_WHALE_MARKERS, MIN_WHALE_BTC)) {
-      add(b.t, { position: 'aboveBar', shape: 'arrowDown', color: WHALE_DEPOSIT_COLOR, text: `입금 ${btc(b.depositBtc)}` });
+      add(b.t, { kind: 'whale', title: `⛓️ 거래소 입금 ${btcLong(b.depositBtc)}`, detail: '온체인 · 이 캔들 동안 합계 (팔려고 옮겼을 수 있어요)' },
+        { position: 'aboveBar', shape: 'arrowDown', color: WHALE_DEPOSIT_COLOR, text: `입금 ${btc(b.depositBtc)}` });
     }
     for (const b of topByValue(markerData.whale, (x) => x.withdrawalBtc, MAX_WHALE_MARKERS, MIN_WHALE_BTC)) {
-      add(b.t, { position: 'belowBar', shape: 'arrowUp', color: WHALE_WITHDRAWAL_COLOR, text: `출금 ${btc(b.withdrawalBtc)}` });
+      add(b.t, { kind: 'whale', title: `⛓️ 거래소 출금 ${btcLong(b.withdrawalBtc)}`, detail: '온체인 · 이 캔들 동안 합계 (보관하려고 뺐을 수 있어요)' },
+        { position: 'belowBar', shape: 'arrowUp', color: WHALE_WITHDRAWAL_COLOR, text: `출금 ${btc(b.withdrawalBtc)}` });
     }
   }
   seriesMarkers.setMarkers(markers.sort((a, b) => (a.time as number) - (b.time as number)));
+}
+
+/** #RRGGBB → 흐린 rgba */
+function fadeColor(color: string): string {
+  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color.trim());
+  return m ? `rgba(${parseInt(m[1], 16)}, ${parseInt(m[2], 16)}, ${parseInt(m[3], 16)}, 0.3)` : color;
+}
+
+/** 커서를 올린 표시 옆에 전체 내용을 크게 띄운다 */
+function renderMarkerTip(point: { x: number; y: number } | undefined) {
+  if (!markerTip) return;
+  const info = hoveredMarker ? markerInfo.get(hoveredMarker) : undefined;
+  if (!info || !point) {
+    markerTip.hidden = true;
+    return;
+  }
+  const [title, detail] = markerTip.children as unknown as [HTMLElement, HTMLElement];
+  title.textContent = info.title;
+  detail.textContent = info.detail;
+  markerTip.hidden = false;
+  // 커서 오른쪽 위에, 차트 밖으로 나가면 왼쪽·아래로
+  const box = markerTip.parentElement!.getBoundingClientRect();
+  const w = markerTip.offsetWidth;
+  const h = markerTip.offsetHeight;
+  const x = point.x + 14 + w > box.width - 80 ? point.x - 14 - w : point.x + 14;
+  const y = point.y - 10 - h < 0 ? point.y + 14 : point.y - 10 - h;
+  markerTip.style.transform = `translate(${Math.max(0, x)}px, ${y}px)`;
 }
 
 /** 받아 둔 캔들 기간만큼 청산·고래 합계를 기록 서버에서 다시 받는다 */
@@ -425,10 +473,23 @@ export function initPriceChart() {
 
   onMarketColorsChange(recolor);
 
+  markerTip = document.createElement('div');
+  markerTip.className = 'marker-tip';
+  markerTip.hidden = true;
+  markerTip.append(document.createElement('strong'), document.createElement('span'));
+  container.append(markerTip);
+
   chart.subscribeCrosshairMove((param) => {
     hovering = param.logical !== undefined && param.time !== undefined;
     if (hovering) renderLegend(param.logical as number);
     else renderLatestLegend();
+
+    const id = typeof param.hoveredObjectId === 'string' && markerInfo.has(param.hoveredObjectId) ? param.hoveredObjectId : null;
+    if (id !== hoveredMarker) {
+      hoveredMarker = id;
+      drawMarkers();
+    }
+    renderMarkerTip(param.point);
   });
 
   chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {

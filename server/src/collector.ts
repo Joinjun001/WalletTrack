@@ -5,6 +5,7 @@
  * - 선물 지표: 펀딩비, 미결제약정, 롱/숏 비율 (FUTURES_INTERVAL_SEC마다)
  * - 김치 프리미엄: 업비트 원화 가격 vs 바이낸스 달러 가격 (KIMCHI_INTERVAL_SEC마다)
  * - 급등·급락: 업비트 원화 마켓 전체 실시간 시세 → 웹과 같은 SurgeDetector (src/surge.ts)
+ * - 대형 체결: 여러 거래소 BTC 체결 1 BTC 이상 1분 합계 + 과거 30일 채우기 (bigTrades.ts)
  */
 
 import { analyzeTransaction, fromMempoolTx } from '../../src/txAnalysis.ts';
@@ -16,6 +17,7 @@ import type { SurgeEvent } from '../../src/surge.ts';
 import { config, log } from './config.ts';
 import { dryRun, migrate, query } from './db.ts';
 import { keepStream } from './stream.ts';
+import { addUpbitTradeMessage, collectBigTrades, takeSavedCount } from './bigTrades.ts';
 
 const MEMPOOL_WS = 'wss://mempool.space/api/v1/ws';
 const LIQUIDATION_WS = 'wss://fstream.binance.com/market/ws/!forceOrder@arr';
@@ -181,10 +183,15 @@ async function collectSurges() {
     binary: true,
     onOpen: (ws) => {
       socket = ws;
-      ws.send(JSON.stringify([{ ticket: 'wallet-track-collector' }, { type: 'ticker', codes: surgeMarkets }]));
+      // 같은 연결로 BTC 체결도 받는다 (대형 체결 합계). 업비트는 연결 수를 엄격하게 제한한다
+      ws.send(JSON.stringify([{ ticket: 'wallet-track-collector' }, { type: 'ticker', codes: surgeMarkets }, { type: 'trade', codes: ['KRW-BTC'] }]));
     },
     onMessage: (data) => {
-      const t = JSON.parse(data) as { code?: string; trade_price?: number; acc_trade_price_24h?: number };
+      const t = JSON.parse(data) as { type?: string; code?: string; trade_price?: number; acc_trade_price_24h?: number };
+      if (t.type === 'trade') {
+        addUpbitTradeMessage(t);
+        return;
+      }
       if (t.code && t.trade_price) detector.update(t.code, t.trade_price, t.acc_trade_price_24h ?? 0, Date.now());
     }
   });
@@ -205,6 +212,7 @@ async function deleteOldRows() {
     ['futures_stats', 'recorded_at'],
     ['kimchi_premium', 'recorded_at'],
     ['surge_events', 'detected_at'],
+    ['big_trade_minutes', 'minute'],
     ['usage_events', 'created_at']
   ];
   try {
@@ -230,10 +238,11 @@ async function main() {
   every(config.futuresIntervalMs, collectFutures);
   every(config.kimchiIntervalMs, collectKimchi);
   collectSurges();
+  collectBigTrades();
   if (!dryRun) every(RETENTION_CHECK_MS, deleteOldRows);
 
   setInterval(() => {
-    log(`최근 10분 저장: 고래 ${saved.whales}, 청산 ${saved.liquidations}, 선물 ${saved.futures}, 김프 ${saved.kimchi}, 급등·급락 ${saved.surges}`);
+    log(`최근 10분 저장: 고래 ${saved.whales}, 청산 ${saved.liquidations}, 선물 ${saved.futures}, 김프 ${saved.kimchi}, 급등·급락 ${saved.surges}, 대형 체결 ${takeSavedCount()}분`);
     saved.whales = saved.liquidations = saved.futures = saved.kimchi = saved.surges = 0;
   }, STATS_LOG_MS);
 }

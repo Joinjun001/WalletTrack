@@ -67,7 +67,23 @@ function savedTheme(): Theme | null {
   }
 }
 
+/**
+ * 색을 바꾸는 동안 CSS 전환 효과를 끈다. 버튼·가격 글씨의 transition 때문에 테마를 바꾸면
+ * 화면 전체가 0.2~0.3초에 걸쳐 서서히 바뀌어 눈이 피로했다. 새 색이 그려진 뒤 다시 켠다.
+ */
+function withoutTransitions(change: () => void) {
+  const root = document.documentElement;
+  root.classList.add('theme-switching');
+  change();
+  void getComputedStyle(root).color; // 전환 없이 새 색을 먼저 계산시킨다
+  requestAnimationFrame(() => requestAnimationFrame(() => root.classList.remove('theme-switching')));
+}
+
 function applyTheme(theme: Theme) {
+  withoutTransitions(() => applyThemeNow(theme));
+}
+
+function applyThemeNow(theme: Theme) {
   document.documentElement.dataset.theme = theme;
   const button = document.getElementById('theme-toggle');
   if (button) {
@@ -81,6 +97,10 @@ function applyTheme(theme: Theme) {
 }
 
 function applyColorScheme(scheme: ColorScheme) {
+  withoutTransitions(() => applyColorSchemeNow(scheme));
+}
+
+function applyColorSchemeNow(scheme: ColorScheme) {
   document.documentElement.dataset.colors = scheme;
   const button = document.getElementById('color-toggle');
   if (button) {

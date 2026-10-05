@@ -81,6 +81,13 @@
   --down-rgb: 229, 57, 53;
 }
 
+/* 테마·색 전환 순간에는 전환 효과 없이 바로 바꾼다 (theme.ts withoutTransitions) */
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -896,6 +903,9 @@ body {
 
 .whale-flow strong { font-family: var(--font-mono); color: var(--text-main); }
 .flow-title { font-weight: 800; color: var(--text-main); margin-right: auto; }
+/* 제목 + 기간 버튼 한 줄, 그 아래 합계 */
+.flow-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; width: 100%; }
+.flow-note { margin-left: auto; font-size: 0.75rem; color: var(--text-muted); }
 
 /* Funding table & liquidation stats */
 .card-gap { margin-bottom: 1rem; }
@@ -1497,3 +1507,25 @@ body {
 /* 캔들 간격 버튼이 많아서 조금 촘촘하게 */
 .candle-intervals { gap: 0.25rem; }
 .candle-intervals .interval-btn { padding: 0.25rem 0.45rem; }
+
+/* 차트 청산·입출금 표시에 커서를 올리면 뜨는 설명 (priceChart.ts) */
+.price-chart { position: relative; }
+.marker-tip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--dialog-bg);
+  box-shadow: var(--panel-shadow);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.marker-tip[hidden] { display: none; }
+.marker-tip strong { font-size: 0.95rem; font-weight: 800; color: var(--text-strong); }
+.marker-tip span { font-size: 0.72rem; color: var(--text-muted); }
