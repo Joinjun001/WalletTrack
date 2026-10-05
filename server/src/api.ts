@@ -12,7 +12,7 @@
  * GET /api/futures?symbol=BTCUSDT&hours=24
  * GET /api/kimchi?symbol=BTC&hours=24
  * GET /api/surges?threshold=3&hours=24&limit=50                       업비트 원화 마켓 급등·급락 기록
- * GET /api/big-trades/summary?hours=24                                대형 체결(1 BTC 이상) 매수·매도 합계와 거래소별 기록 시작 시각
+ * GET /api/big-trades/summary?hours=24                                대형 체결(1 BTC 이상) 매수·매도 합계(until까지)와 거래소별 기록 시작 시각
  * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...], /api/upbit/tickers, /api/upbit/markets: 업비트 중계 (upbitProxy.ts)
  *
  * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts). config.postOrigins에서 보낸 것만 받는다
@@ -50,6 +50,9 @@ function symbolParam(q: Params, fallback: string): string {
 
 const MAX_BUCKETS = 5_000;
 const BIG_TRADE_CACHE_MS = 60_000;
+const BIG_TRADE_CACHE_1H_MS = 10_000; // 1시간은 짧은 기간이라 자주 갱신
+// 수집기는 끝난 분을 1분마다 저장하므로 2분 전 분까지는 저장이 끝나 있다. 그 뒤는 웹이 실시간 체결로 더한다
+const BIG_TRADE_SAVED_LAG_MS = 2 * 60_000;
 const bigTradeCache = new Map<number, { at: number; value: unknown }>();
 
 /** 캔들 구간 합계용: 기간 ÷ 구간이 너무 많으면 거절한다 (한 요청에 수만 행 계산 방지) */
@@ -241,16 +244,19 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
     }));
   },
 
-  // 1달이면 최대 수십만 행을 더하므로 기간별로 1분 동안 캐시한다
+  // 1달이면 최대 수십만 행을 더하므로 기간별로 캐시한다 (1시간 10초, 그 외 1분)
+  // 합계는 until(저장이 확실히 끝난 분의 경계)까지. 웹은 until 이후 체결을 직접 더해 실시간으로 보여 준다
   '/api/big-trades/summary': async (q) => {
     const hours = Math.round(numParam(q, 'hours', 24, 1, 24 * 31));
     const hit = bigTradeCache.get(hours);
-    if (hit && Date.now() - hit.at < BIG_TRADE_CACHE_MS) return hit.value;
+    if (hit && Date.now() - hit.at < (hours === 1 ? BIG_TRADE_CACHE_1H_MS : BIG_TRADE_CACHE_MS)) return hit.value;
+    const until = Math.floor((Date.now() - BIG_TRADE_SAVED_LAG_MS) / 60_000) * 60_000;
     const [sums, since, live, filled] = await Promise.all([
       query<{ buy_btc: number | null; sell_btc: number | null; buy_count: number | null; sell_count: number | null }>(
         `SELECT sum(buy_btc) AS buy_btc, sum(sell_btc) AS sell_btc, sum(buy_count)::int8 AS buy_count, sum(sell_count)::int8 AS sell_count
-         FROM big_trade_minutes WHERE minute > now() - $1::int * interval '1 hour'`,
-        [hours]
+         FROM big_trade_minutes
+         WHERE minute >= to_timestamp($2 / 1000.0) - $1::int * interval '1 hour' AND minute < to_timestamp($2 / 1000.0)`,
+        [hours, until]
       ),
       query<{ exchange: string; since: Date }>(`SELECT exchange, min(minute) AS since FROM big_trade_minutes GROUP BY exchange`),
       query<{ t: Date | null }>(`SELECT min(started_at) AS t FROM big_trade_live`),
@@ -275,6 +281,7 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
     }
     const value = {
       hours,
+      until,
       buyBtc: s?.buy_btc ?? 0,
       sellBtc: s?.sell_btc ?? 0,
       buyCount: s?.buy_count ?? 0,

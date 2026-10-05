@@ -71,6 +71,7 @@ export interface WhaleFlow {
 /** 대형 체결(1 BTC 이상) 기간 합계. since: 거래소별 기록 시작 시각(ms) */
 export interface BigTradeSummary {
   hours: number;
+  until: number; // 합계에 들어간 마지막 시각(ms, 미포함). 이후 체결은 웹이 실시간으로 더한다
   buyBtc: number;
   sellBtc: number;
   buyCount: number;

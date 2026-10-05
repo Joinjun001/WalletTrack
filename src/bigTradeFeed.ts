@@ -1,7 +1,8 @@
 /**
  * 🐋 대형 체결 탭: 여러 거래소 BTC 체결 중 큰 주문(1 BTC 이상)을 실시간 피드로 보여 주고,
- * 기간별 매수·매도·순매수 합계를 낸다. 1시간은 페이지를 연 뒤부터 브라우저에서 모은 값,
- * 하루·1주·1달은 기록 서버가 모은 1분 합계(server/src/bigTrades.ts)를 1분마다 받는다.
+ * 기간별(1시간·하루·1주·1달) 매수·매도·순매수 합계를 낸다. 합계 = 기록 서버가 모은 1분 합계(server/src/bigTrades.ts,
+ * until까지, 1분마다 다시 받음) + until 이후 브라우저가 실시간으로 받은 체결. 그래서 페이지를 열자마자 기간 전체가 보이고
+ * 체결이 들어오는 즉시 바뀐다. 서버에 연결할 수 없으면 1시간만 페이지를 연 뒤부터 모은 값으로 보여 준다.
  */
 
 import { onBtcTrade } from './btcStreams.ts';
@@ -21,10 +22,10 @@ const MAX_STORED = 500;
 const MAX_SHOWN = 60;
 const FILTERS = [1, 5, 10, 50];
 const FILTER_KEY = 'wallettrack.bigTradeBtc';
-const FLOW_PERIODS = [1, 24, 168, 720]; // 시간. 1시간만 브라우저에서 계산
+const FLOW_PERIODS = [1, 24, 168, 720]; // 시간
 const SERVER_REFRESH_MS = 60_000;
-const LOCAL_UNIT = '1 BTC 이상 · 페이지를 연 뒤부터';
-const SERVER_UNIT = '1 BTC 이상 · 5개 거래소 · 기록 서버';
+const SERVER_UNIT = '1 BTC 이상 · 5개 거래소';
+const LOCAL_UNIT = '1 BTC 이상 · 페이지를 연 뒤부터 (기록 서버 연결 안 됨)';
 
 interface Item extends MergedTrade {
   krw: number; // 받은 시점 시세로 환산
@@ -35,6 +36,8 @@ let items: Item[] = []; // 최신이 앞
 let minBtc = MIN_BTC;
 let flowHours = 1;
 let serverRequest = 0;
+let base: BigTradeSummary | null = null; // 지금 고른 기간의 서버 합계
+let serverFailed = false;
 
 function formatBtc(btc: number): string {
   return `${btc.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BTC`;
@@ -103,18 +106,29 @@ function formatSumBtc(btc: number): string {
   return `${btc.toLocaleString('ko-KR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} BTC`;
 }
 
-/** 1시간: 페이지를 연 뒤 받은 체결로 계산 */
-function renderSummary() {
-  if (flowHours !== 1) return;
-  const since = Date.now() - SUMMARY_MS;
+/** since 이후 브라우저가 받은 체결 합계 */
+function liveSums(since: number): { buy: number; sell: number } {
   let buy = 0;
   let sell = 0;
   for (const t of items) {
-    if (t.ts < since) continue;
+    if (t.ts < since) continue; // 거래소마다 시각이 조금씩 달라 순서가 완전히 맞지는 않는다
     if (t.side === 'buy') buy += t.btc;
     else sell += t.btc;
   }
-  renderSums(buy, sell);
+  return { buy, sell };
+}
+
+/** 서버 합계 + 그 이후 실시간 체결. 서버가 안 되면 1시간만 브라우저 값 */
+function renderSummary() {
+  if (base && base.hours === flowHours) {
+    const live = liveSums(base.until);
+    renderSums(base.buyBtc + live.buy, base.sellBtc + live.sell);
+  } else if (serverFailed && flowHours === 1) {
+    const live = liveSums(Date.now() - SUMMARY_MS);
+    renderSums(live.buy, live.sell);
+  } else {
+    renderSums(null, null);
+  }
 }
 
 /** 기록이 기간보다 짧은 거래소를 알려 준다 (예: "OKX 10/6 07:00부터") */
@@ -139,33 +153,26 @@ function coverageNote(s: BigTradeSummary): string {
   return short.join(' · ');
 }
 
-/** 하루·1주·1달: 기록 서버 합계 */
+/** 고른 기간의 서버 합계를 받는다 (1분마다 다시) */
 async function loadServerSummary() {
-  if (flowHours === 1) return;
   const request = ++serverRequest;
   const hours = flowHours;
   const s = await getHistory<BigTradeSummary>(`/big-trades/summary?hours=${hours}`);
   if (request !== serverRequest || hours !== flowHours) return; // 그 사이 기간이 바뀌었다
-  if (!s) {
-    renderSums(null, null);
-    setText('big-flow-note', '기록 서버에 연결할 수 없어요');
-    return;
-  }
-  renderSums(s.buyBtc, s.sellBtc);
-  setText('big-flow-note', coverageNote(s));
+  serverFailed = !s;
+  base = s;
+  setText('big-flow-unit', s || hours !== 1 ? SERVER_UNIT : LOCAL_UNIT);
+  setText('big-flow-note', s ? coverageNote(s) : '기록 서버에 연결할 수 없어요');
+  renderSummary();
 }
 
 function selectFlowPeriod(hours: number) {
   flowHours = hours;
-  serverRequest++;
+  base = null;
   document.querySelectorAll<HTMLButtonElement>('.flow-period-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.flowHours) === hours));
-  setText('big-flow-unit', hours === 1 ? LOCAL_UNIT : SERVER_UNIT);
   setText('big-flow-note', '');
-  if (hours === 1) renderSummary();
-  else {
-    renderSums(null, null);
-    loadServerSummary();
-  }
+  renderSummary();
+  loadServerSummary();
 }
 
 function onTrade(t: MergedTrade) {
@@ -226,7 +233,8 @@ export function initBigTradeFeed() {
 
   renderList();
   renderSummary();
+  loadServerSummary();
   onBtcTrade(onTrade);
-  setInterval(renderSummary, 30_000); // 1시간이 지난 체결을 합계에서 뺀다
+  setInterval(renderSummary, 30_000); // 서버가 안 될 때: 1시간이 지난 체결을 합계에서 뺀다
   setInterval(loadServerSummary, SERVER_REFRESH_MS);
 }

@@ -32,7 +32,7 @@ mempool.space / 바이낸스 / 업비트
 | `GET /api/futures?symbol=BTCUSDT&hours=24` | 펀딩비·미결제약정·롱 비율 추이 |
 | `GET /api/kimchi?symbol=BTC&hours=24` | 김프 추이 |
 | `GET /api/surges?threshold=3&hours=24&limit=50` | 업비트 원화 마켓 급등·급락 기록, 최신순 (threshold = 2·3·5·10%) |
-| `GET /api/big-trades/summary?hours=24` | BTC 대형 체결(≥1 BTC) 매수·매도 합계·건수 (hours 1~744, 1분 캐시), 거래소별 기록 시작 시각(`since`), 아직 못 채운 날(`missingDays`) |
+| `GET /api/big-trades/summary?hours=24` | BTC 대형 체결(≥1 BTC) 매수·매도 합계·건수, `until`(합계에 들어간 마지막 시각 = 저장이 확실히 끝난 2분 전 분 경계, 웹이 그 뒤 체결을 실시간으로 더함) (hours 1~744, 캐시 1시간 10초·그 외 1분), 거래소별 기록 시작 시각(`since`), 아직 못 채운 날(`missingDays`) |
 | `GET /api/liquidations/by-symbol?hours=24&limit=10` | 코인별 청산 합계 순위 |
 | `GET /api/whales/flow?hours=24` | 고래 거래 입금·출금·전송 합계 |
 | `GET /api/liquidations/buckets?symbol=BTCUSDT&hours=50&minutes=15` | 캔들 구간별 롱·숏 청산 합계 (가격 차트 표시) |
