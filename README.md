@@ -35,6 +35,10 @@ npm run dev          # http://localhost:5173
 
 지난 기록(고래 체결 합계, 청산 통계, 김프 추이 등)은 `server/`의 기록 서버가 모읍니다. 실행 방법은 [server/README.md](server/README.md)를 보세요.
 
+## 업데이트 내역
+
+날짜별로 달라진 점은 [CHANGELOG.md](CHANGELOG.md)에 있어요.
+
 ## 기술 스택
 
 Vite · TypeScript · lightweight-charts · Node.js · PostgreSQL · Docker Compose · Vercel
