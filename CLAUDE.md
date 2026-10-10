@@ -60,3 +60,7 @@
 - 이 서버에는 git 작성자가 설정돼 있지 않다: `git -c user.name=joinjun001 -c user.email=109087027+Joinjun001@users.noreply.github.com commit ...`
 - 작업 브랜치 `feat/market-tools`와 `main`이 같은 커밋을 가리키게 둘 다 푸시한다 (`git push origin HEAD:main && git push origin HEAD`).
 - 푸시 후 실제 사이트에 반영됐는지 확인한다.
+- **`CHANGELOG.md`를 고친 배포는 GitHub 릴리스도 맞춘다** (사용자 요청, 2026-10-10). 릴리스는 KST 날짜마다 하나, 태그 `vYYYY.MM.DD`, 제목은 날짜(CHANGELOG 제목에 부제가 있으면 그대로), 본문은 CHANGELOG의 그 날짜 내용 + 맨 아래 `전체 내역: [CHANGELOG.md](https://github.com/Joinjun001/WalletTrack/blob/main/CHANGELOG.md)`.
+  - 그날 릴리스가 없으면: `git -c user.name=joinjun001 -c user.email=109087027+Joinjun001@users.noreply.github.com tag -a vYYYY.MM.DD -m "YYYY-MM-DD"` → `git push origin vYYYY.MM.DD` → `gh release create vYYYY.MM.DD --title ... --notes-file ... --verify-tag --latest`
+  - 이미 있으면 (같은 날 두 번째 배포): 같은 방법으로 태그를 HEAD로 옮겨 다시 푸시하고(`tag -fa`, `push -f origin vYYYY.MM.DD`) `gh release edit vYYYY.MM.DD --notes-file ...`로 본문을 바꾼다. 지난 날짜의 태그는 옮기지 않는다.
+  - `gh`는 `Joinjun001` 계정으로 로그인돼 있다. 로그인이 풀려 있으면 사용자에게 `! gh auth login`을 부탁한다.
