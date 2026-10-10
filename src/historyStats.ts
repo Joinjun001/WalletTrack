@@ -1,13 +1,13 @@
 /**
  * 서버 기록 통계: 기간별(1h/4h/24h) 청산 합계와 코인별 청산 순위, 고래 거래의 거래소 입금·출금 흐름 (24시간)
- * 기간별 청산 합계는 청산 피드 보기를 따른다 (코인 = 바이낸스 {코인}USDT, 전체 = 바이낸스 전체 코인). 서버는 바이낸스 청산만 모은다.
+ * 기간별 청산 합계는 청산 피드 보기를 따른다 (코인 = 고른 코인들의 바이낸스 {코인}USDT 합계, 전체 = 바이낸스 전체 코인). 서버는 바이낸스 청산만 모은다.
  */
 
 import { escapeHtml } from './txAnalysis.ts';
 import { formatUsdShort } from './market.ts';
 import { getHistory } from './historyApi.ts';
 import type { LiquidationBySymbol, LiquidationSummary, WhaleFlow } from './historyApi.ts';
-import { liqMode, onLiqModeChange } from './futuresPanel.ts';
+import { liqView, onLiqViewChange } from './futuresPanel.ts';
 
 const REFRESH_MS = 60 * 1000;
 const WINDOWS = [1, 4, 24];
@@ -31,9 +31,9 @@ let statsRequest = 0;
 
 async function refreshLiquidationStats() {
   const request = ++statsRequest;
-  const m = liqMode();
-  const symbol = m === 'all' ? '' : `&symbol=${m}USDT`;
-  setText('liq-stats-unit', m === 'all' ? '바이낸스 전체 코인 · 1분마다 갱신' : `바이낸스 ${m}USDT · 1분마다 갱신`);
+  const view = liqView();
+  const symbol = view === 'all' ? '' : `&symbol=${view.map((c) => `${c}USDT`).join(',')}`;
+  setText('liq-stats-unit', view === 'all' ? '바이낸스 전체 코인 · 1분마다 갱신' : `바이낸스 ${view.join('·')} · 1분마다 갱신`);
   const [summaries, top] = await Promise.all([
     Promise.all(WINDOWS.map((h) => getHistory<LiquidationSummary>(`/liquidations/summary?hours=${h}${symbol}`))),
     getHistory<LiquidationBySymbol[]>(`/liquidations/by-symbol?hours=24&limit=${TOP_SYMBOLS}`)
@@ -88,6 +88,6 @@ export function initHistoryStats() {
   refreshLiquidationStats();
   refreshWhaleFlow();
   setInterval(refreshLiquidationStats, REFRESH_MS);
-  onLiqModeChange(refreshLiquidationStats);
+  onLiqViewChange(refreshLiquidationStats);
   setInterval(refreshWhaleFlow, REFRESH_MS);
 }

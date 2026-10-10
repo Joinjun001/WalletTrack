@@ -4,8 +4,8 @@
  * GET /api/health                              수집 상태 (테이블별 마지막 저장 시각)
  * GET /api/usage/visitors                      오늘/전체 익명 순 방문자 수(KST)
  * GET /api/whales?hours=24&minBtc=0.1&limit=300
- * GET /api/liquidations?hours=24&minUsd=1000&limit=40[&symbol=BTCUSDT]
- * GET /api/liquidations/summary?hours=24[&symbol=BTCUSDT]
+ * GET /api/liquidations?hours=24&minUsd=1000&limit=40[&symbol=BTCUSDT,ETHUSDT]   symbol은 쉼표로 최대 5개
+ * GET /api/liquidations/summary?hours=24[&symbol=BTCUSDT,ETHUSDT]
  * GET /api/liquidations/by-symbol?hours=24&limit=10
  * GET /api/whales/flow?hours=24
  * GET /api/liquidations/buckets?symbol=BTCUSDT&hours=50&minutes=15   캔들 구간별 롱·숏 청산 합계 (차트 표시)
@@ -39,9 +39,14 @@ function numParam(q: Params, name: string, fallback: number, min: number, max: n
   return Math.min(max, Math.max(min, value));
 }
 
-/** symbol을 주면 그 종목만, 없으면 전체 (null) */
-function optionalSymbol(q: Params): string | null {
-  return q.has('symbol') ? symbolParam(q, '') : null;
+const MAX_SYMBOLS = 5;
+
+/** symbol을 주면 그 종목들만 (쉼표로 최대 5개, 예: BTCUSDT,ETHUSDT), 없으면 전체 (null) */
+function optionalSymbols(q: Params): string[] | null {
+  if (!q.has('symbol')) return null;
+  const list = [...new Set((q.get('symbol') ?? '').toUpperCase().split(','))];
+  if (list.length > MAX_SYMBOLS || !list.every((v) => /^[A-Z0-9]{2,20}$/.test(v))) throw new HttpError(400, 'invalid symbol');
+  return list;
 }
 
 function symbolParam(q: Params, fallback: string): string {
@@ -126,9 +131,9 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
   '/api/liquidations': async (q) => {
     const rows = await query<{ symbol: string; position: string; usd_value: number; occurred_at: Date }>(
       `SELECT symbol, position, usd_value, occurred_at FROM liquidations
-       WHERE occurred_at > now() - $1::float8 * interval '1 hour' AND usd_value >= $2 AND ($4::text IS NULL OR symbol = $4)
+       WHERE occurred_at > now() - $1::float8 * interval '1 hour' AND usd_value >= $2 AND ($4::text[] IS NULL OR symbol = ANY($4))
        ORDER BY occurred_at DESC LIMIT $3`,
-      [numParam(q, 'hours', 24, 0.1, 24 * 30), numParam(q, 'minUsd', 1000, 0, 1e12), Math.round(numParam(q, 'limit', 40, 1, 500)), optionalSymbol(q)]
+      [numParam(q, 'hours', 24, 0.1, 24 * 30), numParam(q, 'minUsd', 1000, 0, 1e12), Math.round(numParam(q, 'limit', 40, 1, 500)), optionalSymbols(q)]
     );
     return rows.map((r) => ({ symbol: r.symbol, position: r.position, usd: r.usd_value, occurredAt: ms(r.occurred_at) }));
   },
@@ -137,8 +142,8 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
     const hours = numParam(q, 'hours', 24, 0.1, 24 * 30);
     const rows = await query<{ position: string; usd: number; count: number }>(
       `SELECT position, sum(usd_value) AS usd, count(*) AS count FROM liquidations
-       WHERE occurred_at > now() - $1::float8 * interval '1 hour' AND ($2::text IS NULL OR symbol = $2) GROUP BY position`,
-      [hours, optionalSymbol(q)]
+       WHERE occurred_at > now() - $1::float8 * interval '1 hour' AND ($2::text[] IS NULL OR symbol = ANY($2)) GROUP BY position`,
+      [hours, optionalSymbols(q)]
     );
     const by = (p: string) => rows.find((r) => r.position === p);
     return {

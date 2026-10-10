@@ -1,7 +1,7 @@
 /**
  * 대형 체결·강제청산을 여러 거래소에서 받아 하나로 모은다 (브라우저가 거래소에 직접 연결, API 키 없음).
  * - 체결: 바이낸스 선물·현물 {코인}USDT, 바이비트 {코인}USDT, OKX {코인}-USDT-SWAP, 업비트 KRW-{코인}
- *   BTC는 항상 받고(사운드 알림·고래 알림도 쓴다), 대형 체결 탭에서 다른 코인을 고르면 그 코인 연결을 따로 연다(setExtraTradeCoin).
+ *   BTC는 항상 받고(사운드 알림·고래 알림도 쓴다), 대형 체결 탭에서 다른 코인을 고르면 그 코인들을 거래소마다 연결 하나로 더 받는다(setExtraTradeCoins).
  *   큰 시장가 주문은 여러 체결로 쪼개져 오므로 거래소·코인별로 같은 방향 체결을 0.1초 동안 모아 주문 하나로 본다.
  * - 강제청산: 대형 코인 전부. 바이낸스(futuresPanel.ts의 전체 마켓 스트림), 바이비트, OKX
  * 메시지 해석은 exchangeFeeds.ts (테스트 있음).
@@ -33,7 +33,7 @@ export function onBtcTrade(fn: (t: MergedTrade) => void) {
   btcTradeListeners.push(fn);
 }
 
-/** 모아진 체결: BTC + setExtraTradeCoin으로 고른 코인 */
+/** 모아진 체결: BTC + setExtraTradeCoins로 고른 코인 */
 export function onFeedTrade(fn: (t: MergedTrade) => void) {
   tradeListeners.push(fn);
 }
@@ -97,16 +97,16 @@ function connect(name: string, url: string, onMessage: (data: string) => void, s
   };
 }
 
-/** 한 코인의 체결 연결 (바이낸스 선물·현물, 바이비트, OKX). 업비트는 krMarket.ts의 시세 연결로 받는다 */
-function connectTrades(coin: FeedCoin, withLiquidations = false): (() => void)[] {
-  const lower = coin.toLowerCase();
-  // 바이낸스 선물 시장 데이터 스트림은 /market 경로 (futuresPanel.ts 참고)
-  const bybitArgs = [`publicTrade.${coin}USDT`, ...(withLiquidations ? FEED_COINS.map((c) => `allLiquidation.${c}USDT`) : [])];
-  const okxArgs = [{ channel: 'trades', instId: `${coin}-USDT-SWAP` }, ...(withLiquidations ? [{ channel: 'liquidation-orders', instType: 'SWAP' }] : [])];
+/** 코인들의 체결 연결 (바이낸스 선물·현물, 바이비트, OKX — 거래소마다 하나). 업비트는 krMarket.ts의 시세 연결로 받는다 */
+function connectTrades(coins: FeedCoin[], withLiquidations = false): (() => void)[] {
+  // 바이낸스는 묶음 스트림(/stream?streams=a/b, 메시지는 data 안). 선물 시장 데이터는 /market 경로 (futuresPanel.ts 참고)
+  const binanceStreams = coins.map((c) => `${c.toLowerCase()}usdt@aggTrade`).join('/');
+  const bybitArgs = [...coins.map((c) => `publicTrade.${c}USDT`), ...(withLiquidations ? FEED_COINS.map((c) => `allLiquidation.${c}USDT`) : [])];
+  const okxArgs = [...coins.map((c) => ({ channel: 'trades', instId: `${c}-USDT-SWAP` })), ...(withLiquidations ? [{ channel: 'liquidation-orders', instType: 'SWAP' }] : [])];
   return [
-    connect('binance_futures_trade', `wss://fstream.binance.com/market/ws/${lower}usdt@aggTrade`,
+    connect('binance_futures_trade', `wss://fstream.binance.com/market/stream?streams=${binanceStreams}`,
       (data) => addFill(parseBinanceAggTrade(JSON.parse(data), 'binance-futures'))),
-    connect('binance_spot_trade', `wss://stream.binance.com:9443/ws/${lower}usdt@aggTrade`,
+    connect('binance_spot_trade', `wss://stream.binance.com:9443/stream?streams=${binanceStreams}`,
       (data) => addFill(parseBinanceAggTrade(JSON.parse(data), 'binance-spot'))),
     connect('bybit', 'wss://stream.bybit.com/v5/public/linear', (data) => {
       const msg = JSON.parse(data);
@@ -121,21 +121,21 @@ function connectTrades(coin: FeedCoin, withLiquidations = false): (() => void)[]
   ];
 }
 
-let extraCoin: FeedCoin | null = null;
+let extraCoins = '';
 let closeExtra: (() => void)[] = [];
 
-/** BTC 말고 체결을 더 받을 코인 (대형 체결 탭에서 고른 코인). null이나 'BTC'면 BTC만 */
-export function setExtraTradeCoin(coin: FeedCoin | null) {
-  const next = coin === 'BTC' ? null : coin;
-  if (next === extraCoin) return;
+/** BTC 말고 체결을 더 받을 코인들 (대형 체결 탭에서 고른 코인). BTC는 빼고 본다 */
+export function setExtraTradeCoins(coins: FeedCoin[]) {
+  const next = FEED_COINS.filter((c) => c !== 'BTC' && coins.includes(c));
+  if (next.join(',') === extraCoins) return;
   closeExtra.forEach((close) => close());
-  extraCoin = next;
-  closeExtra = next ? connectTrades(next) : [];
-  setUpbitTradeCoins(next ? ['BTC', next] : ['BTC']);
+  extraCoins = next.join(',');
+  closeExtra = next.length ? connectTrades(next) : [];
+  setUpbitTradeCoins(['BTC', ...next]);
 }
 
 export function initBtcStreams() {
-  connectTrades('BTC', true); // BTC 연결이 대형 코인 청산(바이비트·OKX)도 받는다
+  connectTrades(['BTC'], true); // BTC 연결이 대형 코인 청산(바이비트·OKX)도 받는다
 
   onUpbitTrade((msg) => addFill(parseUpbitTrade(msg)));
   onLiveLiquidation((position, usd, symbol) => {

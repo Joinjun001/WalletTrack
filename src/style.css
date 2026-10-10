@@ -801,7 +801,9 @@ body {
 .liq-item.short { background: rgba(var(--up-rgb), 0.1); border-left: 3px solid var(--up); }
 .liq-item.big { box-shadow: 0 0 14px rgba(var(--accent-rgb), 0.3); border-left-color: var(--accent); }
 
-.liq-symbol { font-weight: 800; }
+.liq-symbol { font-weight: 800; white-space: nowrap; }
+.liq-exchange { font-weight: 600; font-size: 0.85em; color: var(--text-muted); }
+.multi-coin .liq-item { grid-template-columns: 7rem 4.5rem 1fr auto; }
 .liq-item.long .liq-side { color: var(--down); }
 .liq-item.short .liq-side { color: var(--up); }
 .liq-usd { font-family: var(--font-mono); font-weight: 800; text-align: right; }
@@ -919,6 +921,14 @@ body {
 /* 제목 + 기간 버튼 한 줄, 그 아래 합계 */
 .flow-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; width: 100%; }
 .flow-note { margin-left: auto; font-size: 0.75rem; color: var(--text-muted); }
+/* 대형 체결 합계: 고른 코인마다 한 줄 */
+.big-flow-table { width: 100%; border-collapse: collapse; }
+.big-flow-table th { font-size: 0.72rem; font-weight: 600; color: var(--text-muted); text-align: left; padding: 0 0 0.2rem; }
+.big-flow-table td { padding: 0.15rem 0; font-family: var(--font-mono); color: var(--text-main); }
+.big-flow-table .num { text-align: right; padding-left: 1rem; }
+.big-flow-table .up { color: var(--up); }
+.big-flow-table .down { color: var(--down); }
+.big-flow-coin { font-weight: 800; }
 
 /* Funding table & liquidation stats */
 .card-gap { margin-bottom: 1rem; }
@@ -1182,6 +1192,7 @@ body {
   .coin-name-cell span { display: block; }
   .hide-mobile { display: none; }
   .liq-item { grid-template-columns: 3.5rem 4rem 1fr auto; font-size: 0.8rem; }
+  .multi-coin .liq-item { grid-template-columns: 6rem 4rem 1fr auto; }
   .tab-btn { padding: 0.5rem 0.75rem; font-size: 0.85rem; }
   .tx-right { align-items: flex-start; }
 }
@@ -1189,6 +1200,8 @@ body {
 @media (max-width: 768px) {
   .whale-flow { padding: 0.75rem 1rem; gap: 0.35rem 1rem; }
   .flow-title { width: 100%; }
+  .big-flow-table td { font-size: 0.75rem; }
+  .big-flow-table .num { padding-left: 0.5rem; }
   .liq-stats-grid { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
   .history-chart { height: 240px; }
   .chart-head .interval-group { flex-wrap: wrap; }

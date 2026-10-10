@@ -27,8 +27,8 @@ mempool.space / 바이낸스 / 업비트
 |---|---|
 | `GET /api/health` | 테이블별 마지막 저장 시각 (수집이 멈췄는지 확인용) |
 | `GET /api/whales?hours=24&minBtc=0.1&limit=300` | 고래 거래, 최신순 |
-| `GET /api/liquidations?hours=24&minUsd=1000&limit=40[&symbol=BTCUSDT]` | 강제청산, 최신순 (symbol을 주면 그 종목만) |
-| `GET /api/liquidations/summary?hours=24[&symbol=BTCUSDT]` | 롱/숏 청산 합계 (symbol을 주면 그 종목만) |
+| `GET /api/liquidations?hours=24&minUsd=1000&limit=40[&symbol=BTCUSDT,ETHUSDT]` | 강제청산, 최신순 (symbol을 주면 그 종목만, 쉼표로 최대 5개) |
+| `GET /api/liquidations/summary?hours=24[&symbol=BTCUSDT,ETHUSDT]` | 롱/숏 청산 합계 (symbol을 주면 그 종목들 합계, 쉼표로 최대 5개) |
 | `GET /api/futures?symbol=BTCUSDT&hours=24` | 펀딩비·미결제약정·롱 비율 추이 |
 | `GET /api/kimchi?symbol=BTC&hours=24` | 김프 추이 |
 | `GET /api/surges?threshold=3&hours=24&limit=50` | 업비트 원화 마켓 급등·급락 기록, 최신순 (threshold = 2·3·5·10%) |

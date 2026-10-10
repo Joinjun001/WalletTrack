@@ -200,9 +200,10 @@
                 <button type="button" class="interval-btn flow-period-btn" data-flow-hours="720">1달</button>
               </div>
             </div>
-            <span>매수 <strong id="big-buy" class="up">-</strong></span>
-            <span>매도 <strong id="big-sell" class="down">-</strong></span>
-            <span title="매수 - 매도. 양수면 큰손이 더 많이 샀어요">순매수 <strong id="big-net">-</strong></span>
+            <table class="big-flow-table">
+              <thead><tr><th>코인</th><th class="num">매수</th><th class="num">매도</th><th class="num" title="매수 - 매도. 양수면 큰손이 더 많이 샀어요">순매수</th></tr></thead>
+              <tbody id="big-flow-rows"></tbody>
+            </table>
             <span id="big-flow-note" class="flow-note"></span>
           </div>
 

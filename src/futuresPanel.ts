@@ -1,6 +1,6 @@
 /**
  * 바이낸스 BTCUSDT 무기한 선물 지표(펀딩비, 미결제약정, 롱/숏 비율), 주요 코인 펀딩비 표, 실시간 강제청산 피드.
- * 청산 피드는 대형 코인별(기본 BTC: 바이낸스·바이비트·OKX의 그 코인 청산 합산)과 '전체'(바이낸스 선물 전체 코인)로 바꿔 볼 수 있다.
+ * 청산 피드는 대형 코인 여러 개(기본 BTC: 바이낸스·바이비트·OKX의 그 코인 청산 합산)나 '전체'(바이낸스 선물 전체 코인)로 바꿔 볼 수 있다.
  * 바이비트·OKX 청산은 main.ts가 btcStreams.ts에서 받아 addOtherExchangeLiquidation으로 넣는다.
  */
 
@@ -10,7 +10,7 @@ import { formatCountdown, formatFundingRate, formatSignedPct, formatUsdShort, li
 import { getHistory } from './historyApi.ts';
 import { trackOnce } from './analytics.ts';
 import type { LiquidationRecord, LiquidationSummary } from './historyApi.ts';
-import { EXCHANGE_LABELS, isFeedCoin, usdtCoin } from './exchangeFeeds.ts';
+import { EXCHANGE_LABELS, FEED_COINS, isFeedCoin, usdtCoin } from './exchangeFeeds.ts';
 import type { Exchange, FeedCoin, Liquidation } from './exchangeFeeds.ts';
 import { track } from './analytics.ts';
 
@@ -23,8 +23,10 @@ const MAX_LIQUIDATION_ITEMS = 40;
 const MAX_STORED = 300; // 보기마다
 const MODE_KEY = 'wallettrack.liqMode';
 
-/** 청산 보기: 대형 코인 하나(세 거래소 합산) 또는 'all'(바이낸스 선물 전체 코인) */
-export type LiqMode = FeedCoin | 'all';
+/** 청산을 모아 두는 단위: 대형 코인 하나(세 거래소 합산) 또는 'all'(바이낸스 선물 전체 코인) */
+type LiqMode = FeedCoin | 'all';
+/** 청산 보기: 'all' 또는 고른 대형 코인들 (FEED_COINS 순서, 최소 1개) */
+export type LiqView = 'all' | FeedCoin[];
 
 interface LiqItem {
   symbol: string; // BTCUSDT
@@ -34,18 +36,20 @@ interface LiqItem {
   ts: number;
 }
 
-let mode: LiqMode = 'BTC';
-const modeListeners: ((m: LiqMode) => void)[] = [];
-const feeds = new Map<LiqMode, LiqItem[]>(); // 보기별 최근 청산 ($1K 이상, 최신이 앞)
+let view: LiqView = ['BTC'];
+const viewListeners: ((v: LiqView) => void)[] = [];
+const feeds = new Map<LiqMode, LiqItem[]>(); // 단위별 최근 청산 ($1K 이상, 최신이 앞)
 
-/** 청산 피드 보기 (코인 / 전체). 청산 통계도 따라 바뀐다 */
-export function liqMode(): LiqMode {
-  return mode;
+/** 청산 피드 보기 (전체 / 고른 코인들). 청산 통계도 따라 바뀐다 */
+export function liqView(): LiqView {
+  return view;
 }
 
-export function onLiqModeChange(fn: (m: LiqMode) => void) {
-  modeListeners.push(fn);
+export function onLiqViewChange(fn: (v: LiqView) => void) {
+  viewListeners.push(fn);
 }
+
+const viewModes = (): LiqMode[] => (view === 'all' ? ['all'] : view);
 
 type LiquidationListener = (position: 'long' | 'short', usd: number, symbol: string) => void;
 const liquidationListeners: LiquidationListener[] = [];
@@ -171,11 +175,13 @@ interface ForceOrder {
   o: { s: string; S: string; ap: string; z: string; T: number };
 }
 
+/** 고른 코인들의 합계를 더한다 (모두 달러) */
 function renderTotals() {
-  const t = totalsOf(mode);
-  setText('liq-long-total', formatUsdShort(t.long));
-  setText('liq-short-total', formatUsdShort(t.short));
-  setText('liq-totals-note', !t.fromServer ? '페이지를 연 뒤부터' : mode === 'all' ? '최근 24시간 + 실시간' : '24시간(바이낸스) + 실시간');
+  const list = viewModes().map(totalsOf);
+  setText('liq-long-total', formatUsdShort(list.reduce((sum, t) => sum + t.long, 0)));
+  setText('liq-short-total', formatUsdShort(list.reduce((sum, t) => sum + t.short, 0)));
+  const fromServer = list.every((t) => t.fromServer);
+  setText('liq-totals-note', !fromServer ? '페이지를 연 뒤부터' : view === 'all' ? '최근 24시간 + 실시간' : '24시간(바이낸스) + 실시간');
 }
 
 /** 이 청산이 들어가는 보기 (전체 = 바이낸스 전체 코인, 코인 = 세 거래소의 그 코인) */
@@ -189,11 +195,14 @@ function modesOf(i: LiqItem): LiqMode[] {
 
 function itemHtml(i: LiqItem): string {
   const time = new Date(i.ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-  // 코인 보기는 코인 대신 거래소를 보여 준다
-  const label = mode === 'all' ? i.symbol.replace(/USDT$/, '') : EXCHANGE_LABELS[i.exchange].replace(' 선물', '');
+  // 코인 보기는 거래소를 보여 준다 (여러 코인이면 코인도)
+  const coin = i.symbol.replace(/USDT$/, '');
+  const exchange = EXCHANGE_LABELS[i.exchange].replace(' 선물', '');
+  const label = view === 'all' ? escapeHtml(coin)
+    : view.length > 1 ? `${escapeHtml(coin)} <span class="liq-exchange">${escapeHtml(exchange)}</span>` : escapeHtml(exchange);
   return `
     <li class="liq-item ${i.position}${i.usd >= 1e6 ? ' big' : ''}">
-      <span class="liq-symbol">${escapeHtml(label)}</span>
+      <span class="liq-symbol">${label}</span>
       <span class="liq-side">${i.position === 'long' ? '롱 청산' : '숏 청산'}</span>
       <span class="liq-usd">${formatUsdShort(i.usd)}</span>
       <span class="liq-time">${time}</span>
@@ -203,10 +212,11 @@ function itemHtml(i: LiqItem): string {
 function renderFeed() {
   const list = document.getElementById('liq-feed');
   if (!list) return;
-  const shown = feedOf(mode).slice(0, MAX_LIQUIDATION_ITEMS);
+  const shown = viewModes().flatMap(feedOf).sort((a, b) => b.ts - a.ts).slice(0, MAX_LIQUIDATION_ITEMS);
   list.innerHTML = shown.length ? shown.map(itemHtml).join('') : '<li class="liq-empty">청산 주문을 기다리는 중...</li>';
+  list.classList.toggle('multi-coin', view !== 'all' && view.length > 1); // 코인 + 거래소를 한 칸에
   const unit = document.getElementById('liq-feed-unit');
-  if (unit) unit.textContent = mode === 'all' ? '바이낸스 선물 전체 · $1K 이상' : `${mode} · 바이낸스·바이비트·OKX · $1K 이상`;
+  if (unit) unit.textContent = view === 'all' ? '바이낸스 선물 전체 · $1K 이상' : `${view.join('·')} · 바이낸스·바이비트·OKX · $1K 이상`;
 }
 
 const itemKey = (i: LiqItem) => `${i.symbol}|${i.ts}|${i.position}|${Math.round(i.usd)}`;
@@ -229,7 +239,7 @@ function addItem(item: LiqItem, live: boolean) {
     list.unshift(item);
     if (list.length > MAX_STORED) list.length = MAX_STORED;
   }
-  if (!live || !modes.includes(mode)) return;
+  if (!live || !modes.some((m) => viewModes().includes(m))) return;
   const list = document.getElementById('liq-feed');
   if (!list) return;
   list.querySelector('.liq-empty')?.remove();
@@ -251,24 +261,25 @@ export function addOtherExchangeLiquidation(l: Liquidation) {
   addItem({ symbol: `${l.coin}USDT`, exchange: l.exchange, position: l.position, usd: l.usd, ts: l.ts }, true);
 }
 
-function setMode(next: LiqMode, save: boolean) {
-  mode = next;
+function setView(next: LiqView, save: boolean) {
+  view = next;
   document.querySelectorAll<HTMLButtonElement>('.liq-mode-btn').forEach((b) => {
-    const on = b.dataset.mode === next;
+    const m = b.dataset.mode;
+    const on = next === 'all' ? m === 'all' : next.includes(m as FeedCoin);
     b.classList.toggle('active', on);
     b.setAttribute('aria-pressed', String(on));
   });
   renderFeed();
   renderTotals();
-  loadLiquidationHistory(next);
+  viewModes().forEach(loadLiquidationHistory);
   if (save) {
     try {
-      localStorage.setItem(MODE_KEY, next);
+      localStorage.setItem(MODE_KEY, next === 'all' ? 'all' : next.join(','));
     } catch {
       // 시크릿 모드 등: 이번 방문 동안만 유지
     }
   }
-  for (const fn of modeListeners) fn(next);
+  for (const fn of viewListeners) fn(next);
 }
 
 function connectLiquidationWebSocket() {
@@ -316,39 +327,50 @@ async function fetchLiquidationHistory(m: LiqMode) {
     const other = m === 'all' ? null : otherLive.get(m);
     totals.set(m, { long: summary.longUsd + (other?.long ?? 0), short: summary.shortUsd + (other?.short ?? 0), fromServer: true });
   }
-  if (m === mode) {
+  if (viewModes().includes(m)) {
     renderFeed();
     renderTotals();
   }
 }
 
-/** 저장된 보기. 예전 값 'btc'는 BTC */
-function savedMode(): LiqMode {
+/** 저장된 보기 ('all' 또는 쉼표로 이은 코인). 예전 값 'btc'는 BTC */
+function savedView(): LiqView {
   try {
-    const saved = localStorage.getItem(MODE_KEY);
+    const saved = localStorage.getItem(MODE_KEY) ?? '';
     if (saved === 'all') return 'all';
-    if (isFeedCoin(saved)) return saved;
+    const list = FEED_COINS.filter((c) => saved.toUpperCase().split(',').includes(c));
+    if (list.length) return list;
   } catch {
     // 저장된 값이 없으면 BTC
   }
-  return 'BTC';
+  return ['BTC'];
 }
 
 export async function initFuturesPanel() {
-  mode = savedMode();
+  view = savedView();
+  // 코인은 누를 때마다 켜고 끈다 (마지막 하나는 끌 수 없다). '전체 코인'은 코인 선택과 따로
   document.querySelectorAll<HTMLButtonElement>('.liq-mode-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const next: LiqMode | null = btn.dataset.mode === 'all' ? 'all' : isFeedCoin(btn.dataset.mode) ? btn.dataset.mode : null;
-      if (!next || next === mode) return;
-      setMode(next, true);
-      track('liq_mode', { mode: next });
+      const m = btn.dataset.mode;
+      let next: LiqView;
+      if (m === 'all') {
+        if (view === 'all') return;
+        next = 'all';
+      } else if (isFeedCoin(m)) {
+        const current = view === 'all' ? [] : view;
+        const picked = current.includes(m) ? current.filter((c) => c !== m) : [...current, m];
+        if (picked.length === 0) return;
+        next = FEED_COINS.filter((c) => picked.includes(c));
+      } else return;
+      setView(next, true);
+      track('liq_mode', { mode: next === 'all' ? 'all' : next.join(',') });
     });
   });
-  setMode(mode, false);
+  setView(view, false);
   refresh();
   setInterval(refresh, REFRESH_MS);
   setInterval(renderCountdown, 1000);
-  // 처음 보기의 기록을 먼저 받고 실시간 연결을 연다 (다른 보기는 고를 때 받고, 겹치는 기록은 뺀다)
-  await loadLiquidationHistory(mode);
+  // 처음 보기의 기록을 먼저 받고 실시간 연결을 연다 (다른 코인은 고를 때 받고, 겹치는 기록은 뺀다)
+  await Promise.all(viewModes().map(loadLiquidationHistory));
   connectLiquidationWebSocket();
 }
