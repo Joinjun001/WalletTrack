@@ -2,6 +2,7 @@
  * 읽기 전용 기록 API. 웹은 처음 열 때 여기서 지난 기록을 받고, 이후 실시간 데이터는 지금처럼 거래소에서 직접 받는다.
  *
  * GET /api/health                              수집 상태 (테이블별 마지막 저장 시각)
+ * GET /api/usage/visitors                      오늘/전체 익명 순 방문자 수(KST)
  * GET /api/whales?hours=24&minBtc=0.1&limit=300
  * GET /api/liquidations?hours=24&minUsd=1000&limit=40[&symbol=BTCUSDT]
  * GET /api/liquidations/summary?hours=24[&symbol=BTCUSDT]
@@ -92,6 +93,17 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
       ok: true,
       latest: row ? Object.fromEntries(Object.entries(row).map(([k, v]) => [k, ms(v)])) : null
     };
+  },
+
+  '/api/usage/visitors': async () => {
+    const [row] = await query<{ total: number; today: number }>(`
+      SELECT count(DISTINCT visitor_id)::int AS total,
+             count(DISTINCT visitor_id) FILTER (
+               WHERE created_at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul')
+             )::int AS today
+      FROM usage_events
+      WHERE name = 'page_view'`);
+    return { total: row?.total ?? 0, today: row?.today ?? 0, timezone: 'Asia/Seoul' };
   },
 
   '/api/whales': async (q) => {

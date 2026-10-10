@@ -170,9 +170,31 @@ function updateVisibleTime() {
   visibleSince = document.visibilityState === 'visible' ? now : null;
 }
 
+interface VisitorCounts {
+  total: number;
+  today: number;
+}
+
+async function loadVisitorCounts() {
+  const today = document.getElementById('visitor-today');
+  const total = document.getElementById('visitor-total');
+  if (!today || !total) return;
+  try {
+    const res = await fetch(`${HISTORY_API}/usage/visitors`, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return;
+    const data = await res.json() as VisitorCounts;
+    today.textContent = Number(data.today || 0).toLocaleString('ko-KR');
+    total.textContent = Number(data.total || 0).toLocaleString('ko-KR');
+  } catch {
+    // 통계 서버가 잠시 꺼져 있어도 본 기능에는 영향이 없다.
+  }
+}
+
 export function initAnalytics() {
   visibleSince = document.visibilityState === 'visible' ? Date.now() : null;
   trackPageView();
+  loadVisitorCounts();
+  setInterval(loadVisitorCounts, 60_000);
 
   addEventListener('error', (e) => trackError(e.message || 'error', e.filename || '', e.lineno || 0));
   addEventListener('unhandledrejection', (e) => {

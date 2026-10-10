@@ -461,40 +461,60 @@
         </div>
 
         <div class="info-card glass-panel tool-card sound-card">
-          <h2 class="info-title" data-help="soundAlerts"><svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg> 사운드 알림 <span class="info-unit">BTC</span></h2>
-          <label class="calc-row whale-alert-row">
-            <span>청산</span>
-            <select id="liq-sound-threshold">
-              <option value="0">끄기</option>
+          <h2 class="info-title" data-help="soundAlerts"><svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg> 사운드 알림 <span class="info-unit">최대 5개</span></h2>
+
+          <div class="sound-section">
+            <div class="sound-section-head">
+              <span>관심 코인</span>
+              <span id="sound-coin-count" class="info-unit">1/5</span>
+            </div>
+            <div id="sound-coin-options" class="sound-coin-options" aria-label="사운드 알림 관심 코인"></div>
+          </div>
+
+          <div class="sound-type-row">
+            <label class="sound-type-toggle">
+              <input id="liq-sound-enabled" type="checkbox" checked>
+              <span>강제청산</span>
+            </label>
+            <select id="liq-sound-threshold" aria-label="강제청산 사운드 기준">
               <option value="10000">$10K 이상</option>
               <option value="50000">$50K 이상</option>
-              <option value="100000">$100K 이상</option>
+              <option value="100000" selected>$100K 이상</option>
               <option value="1000000">$1M 이상</option>
             </select>
-          </label>
-          <label class="calc-row whale-alert-row">
-            <span>체결</span>
-            <select id="trade-sound-threshold">
-              <option value="0">끄기</option>
-              <option value="100000">BTC $100K 이상</option>
-              <option value="500000">BTC $500K 이상</option>
-              <option value="1000000">BTC $1M 이상</option>
-              <option value="5000000">BTC $5M 이상</option>
+          </div>
+
+          <div class="sound-type-row">
+            <label class="sound-type-toggle">
+              <input id="trade-sound-enabled" type="checkbox" checked>
+              <span>대형체결</span>
+            </label>
+            <select id="trade-sound-threshold" aria-label="대형체결 사운드 기준">
+              <option value="100000">$100K 이상</option>
+              <option value="500000">$500K 이상</option>
+              <option value="1000000" selected>$1M 이상</option>
+              <option value="5000000">$5M 이상</option>
             </select>
-          </label>
+          </div>
+
           <label class="calc-row">
             <span>볼륨</span>
             <input id="sound-volume" type="range" min="0" max="100" step="5" value="70" aria-label="사운드 볼륨">
           </label>
           <button id="sound-alert-test" type="button" class="alert-add-btn sound-test-btn">청산 단계별 미리 듣기</button>
+          <p id="sound-last-event" class="sound-last-event">최근 알림 없음</p>
           <p id="sound-alert-note" class="tool-note"></p>
         </div>
       </aside>
     </div>
 
     <footer class="site-footer">
+      <div class="visitor-stats" aria-label="방문자 통계">
+        <span>오늘 <strong id="visitor-today">-</strong></span>
+        <span>총 <strong id="visitor-total">-</strong></span>
+      </div>
       <button id="feedback-open" class="alert-add-btn"><svg class="icon" aria-hidden="true"><use href="#i-message"/></svg> 의견 보내기</button>
-      <p class="tool-note">
+      <p class="tool-note footer-privacy">
         서비스 개선을 위해 익명 사용 기록(방문·기능 사용·오류)을 모아요. 개인정보와 IP는 저장하지 않아요.
         <button id="analytics-toggle" class="footer-link">수집 끄기</button>
       </p>

@@ -40,6 +40,7 @@ mempool.space / 바이낸스 / 업비트
 | `GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...]` | 업비트 캔들 중계 (`to` 이전 200개, 차트 과거 불러오기). `unit`: `minutes/1·3·5·15·30·60·240`, `days`, `weeks`, `months` |
 | `GET /api/upbit/tickers` | 업비트 원화 마켓 전체 시세 중계 |
 | `GET /api/upbit/markets` | 업비트 원화 마켓 목록·한글 이름 중계 |
+| `GET /api/usage/visitors` | 오늘(KST)·전체 익명 순 방문자 수 |
 | `POST /api/events` | 웹 익명 사용 기록 (1분에 120번까지) |
 | `POST /api/feedback` | 사이트 "의견 보내기" (10분에 5번까지) |
 
