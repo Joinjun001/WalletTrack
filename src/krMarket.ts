@@ -46,12 +46,12 @@ export function onUpbitTrade(fn: (msg: Record<string, unknown>) => void) {
 
 let tradeCodes = ['KRW-BTC'];
 
-/** 체결을 받을 코인을 바꾼다. 업비트는 연결 수를 엄격하게 제한해 새로 열지 않고 시세 연결을 다시 연다 */
+/** 체결을 받을 코인을 바꾼다. 업비트는 연결 수를 엄격하게 제한해 따로 열지 않고 시세 연결의 구독을 바꾼다 */
 export function setUpbitTradeCoins(coins: string[]) {
   const next = coins.map((c) => `KRW-${c}`);
   if (next.join(',') === tradeCodes.join(',')) return;
   tradeCodes = next;
-  reconnectUpbit();
+  resubscribeUpbit();
 }
 
 /** 업비트 원화 마켓 시세 수신 (기본 UPBIT_CODES, subscribeUpbitMarkets로 넓힌 마켓 포함) */
@@ -83,18 +83,22 @@ async function fetchUpbitOnce() {
   list?.forEach(applyUpbitTicker);
 }
 
-/** 실시간으로 받을 마켓을 넓힌다 (기본 마켓은 항상 포함). 연결을 새로 연다 */
+/** 실시간으로 받을 마켓을 넓힌다 (기본 마켓은 항상 포함) */
 export function subscribeUpbitMarkets(markets: string[]) {
   wsCodes = Array.from(new Set([...UPBIT_CODES, ...markets]));
-  reconnectUpbit();
+  resubscribeUpbit();
 }
 
-function reconnectUpbit() {
-  if (!upbitWs) return; // 아직 처음 연결 전 (initKrMarket이 연다)
-  const old = upbitWs;
-  upbitWs = null; // 닫힌 연결이 다시 연결하지 않게
-  old?.close();
-  connectUpbitWebSocket();
+function sendSubscription(ws: WebSocket) {
+  ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: wsCodes }, { type: 'trade', codes: tradeCodes }]));
+}
+
+/**
+ * 열린 연결에 구독을 다시 보낸다. 업비트는 같은 연결의 새 요청으로 구독 목록을 바꿔 준다 (2026-10-10 확인).
+ * 연결을 새로 열면 업비트가 연결 횟수 제한(429)으로 막기 쉽다. 아직 연결 중이면 연결될 때 새 목록으로 보낸다
+ */
+function resubscribeUpbit() {
+  if (upbitWs?.readyState === WebSocket.OPEN) sendSubscription(upbitWs);
 }
 
 function connectUpbitWebSocket() {
@@ -103,9 +107,7 @@ function connectUpbitWebSocket() {
   ws.binaryType = 'arraybuffer';
   const decoder = new TextDecoder();
 
-  ws.onopen = () => {
-    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: wsCodes }, { type: 'trade', codes: tradeCodes }]));
-  };
+  ws.onopen = () => sendSubscription(ws);
   ws.onmessage = (event) => {
     try {
       const text = typeof event.data === 'string' ? event.data : decoder.decode(event.data);
@@ -117,7 +119,6 @@ function connectUpbitWebSocket() {
     }
   };
   ws.onclose = () => {
-    if (upbitWs !== ws) return; // subscribeUpbitMarkets가 새 연결로 바꿨다
     console.warn('Upbit WS Closed, reconnecting in 2 seconds...');
     setTimeout(connectUpbitWebSocket, 2000);
   };
