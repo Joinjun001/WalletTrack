@@ -380,86 +380,7 @@
 
       <!-- 네트워크 & 시장 패널 -->
       <aside class="side-column">
-        <div class="info-card glass-panel">
-          <h2 class="info-title" data-help="fee"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> 추천 수수료 <span class="info-unit">sat/vB</span></h2>
-          <div class="fee-grid">
-            <div><span class="fee-label">빠름</span><strong id="fee-fast">-</strong></div>
-            <div><span class="fee-label">30분</span><strong id="fee-half">-</strong></div>
-            <div><span class="fee-label">1시간</span><strong id="fee-hour">-</strong></div>
-          </div>
-        </div>
-
-        <div class="info-card glass-panel">
-          <h2 class="info-title" data-help="block"><svg class="icon" aria-hidden="true"><use href="#i-cube"/></svg> 최근 블록 <span id="block-time" class="info-unit">-</span></h2>
-          <div class="info-main" id="block-height">-</div>
-          <div class="info-sub"><span id="block-pool">-</span> · <span id="block-txs">-</span></div>
-        </div>
-
-        <div class="info-card glass-panel">
-          <h2 class="info-title" data-help="halving"><svg class="icon" aria-hidden="true"><use href="#i-hourglass"/></svg> 다음 반감기</h2>
-          <div class="info-main" id="halving-days">-</div>
-          <div class="info-sub" id="halving-blocks">-</div>
-        </div>
-
-        <div class="info-card glass-panel">
-          <h2 class="info-title" data-help="difficulty"><svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg> 난이도 조정 <span id="difficulty-progress" class="info-unit">-</span></h2>
-          <div class="info-main" id="difficulty-change">-</div>
-          <div class="progress-bar"><div id="difficulty-bar" class="progress-fill"></div></div>
-          <div class="info-sub" id="difficulty-sub">-</div>
-        </div>
-
-        <div class="info-card glass-panel">
-          <h2 class="info-title" data-help="mempool"><svg class="icon" aria-hidden="true"><use href="#i-queue"/></svg> 대기 중 거래 <span class="info-unit">멤풀</span></h2>
-          <div class="info-main" id="mempool-count">-</div>
-          <div class="info-sub" id="mempool-blocks">-</div>
-        </div>
-
-        <div class="info-card glass-panel">
-          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-bars"/></svg> 오늘 시세 <span class="info-unit"><span id="range-coin-label">BTC</span> · 업비트 9시 기준</span></h2>
-          <div class="range-row"><span class="fee-label">고가</span><strong id="krw-high" class="up">-</strong></div>
-          <div class="range-row"><span class="fee-label">저가</span><strong id="krw-low" class="down">-</strong></div>
-        </div>
-        <div class="info-card glass-panel tool-card">
-          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-calculator"/></svg> 환산 계산기</h2>
-          <label class="calc-row"><span>BTC</span><input id="calc-btc" type="text" inputmode="decimal" autocomplete="off"></label>
-          <label class="calc-row"><span>sat</span><input id="calc-sats" type="text" inputmode="numeric" autocomplete="off"></label>
-          <label class="calc-row"><span>원</span><input id="calc-krw" type="text" inputmode="numeric" autocomplete="off"></label>
-          <label class="calc-row"><span>$</span><input id="calc-usd" type="text" inputmode="decimal" autocomplete="off"></label>
-        </div>
-
-        <div class="info-card glass-panel tool-card">
-          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg> 가격 알림 <span class="info-unit">BTC 원화</span></h2>
-          <form id="alert-form" class="alert-form">
-            <input id="alert-price" type="text" inputmode="numeric" autocomplete="off" placeholder="목표 가격" aria-label="목표 가격(원)">
-            <button type="submit" class="alert-add-btn">추가</button>
-          </form>
-          <ul id="alert-list" class="alert-list"></ul>
-        </div>
-
-        <div class="info-card glass-panel tool-card">
-          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-won"/></svg> 김프 알림 <span class="info-unit">BTC · %</span></h2>
-          <form id="kimchi-alert-form" class="alert-form">
-            <input id="kimchi-alert-input" type="text" autocomplete="off" placeholder="목표 김프 (예: 3, -0.5)" aria-label="목표 김프(%)">
-            <button type="submit" class="alert-add-btn">추가</button>
-          </form>
-          <ul id="kimchi-alert-list" class="alert-list"></ul>
-        </div>
-
-        <div class="info-card glass-panel tool-card">
-          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-whale"/></svg> 고래 알림 <span class="info-unit">BTC 대형 체결</span></h2>
-          <label class="calc-row whale-alert-row">
-            <span>기준</span>
-            <select id="whale-alert-threshold">
-              <option value="0">끄기</option>
-              <option value="1">1 BTC 이상</option>
-              <option value="3">3 BTC 이상</option>
-              <option value="10">10 BTC 이상</option>
-              <option value="50">50 BTC 이상</option>
-            </select>
-          </label>
-          <p class="tool-note">이 페이지가 열려 있을 때만, 10초에 한 번까지 알려요</p>
-        </div>
-
+        <!-- 사용자가 먼저 설정하는 알림·도구 -->
         <div class="info-card glass-panel tool-card sound-card">
           <h2 class="info-title" data-help="soundAlerts"><svg class="icon" aria-hidden="true"><use href="#i-volume"/></svg> 사운드 알림 <span class="info-unit">최대 5개</span></h2>
 
@@ -504,6 +425,88 @@
           <button id="sound-alert-test" type="button" class="alert-add-btn sound-test-btn">청산 단계별 미리 듣기</button>
           <p id="sound-last-event" class="sound-last-event">최근 알림 없음</p>
           <p id="sound-alert-note" class="tool-note"></p>
+        </div>
+
+        <div class="info-card glass-panel tool-card">
+          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-bell"/></svg> 가격 알림 <span class="info-unit">BTC 원화</span></h2>
+          <form id="alert-form" class="alert-form">
+            <input id="alert-price" type="text" inputmode="numeric" autocomplete="off" placeholder="목표 가격" aria-label="목표 가격(원)">
+            <button type="submit" class="alert-add-btn">추가</button>
+          </form>
+          <ul id="alert-list" class="alert-list"></ul>
+        </div>
+
+        <div class="info-card glass-panel tool-card">
+          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-won"/></svg> 김프 알림 <span class="info-unit">BTC · %</span></h2>
+          <form id="kimchi-alert-form" class="alert-form">
+            <input id="kimchi-alert-input" type="text" autocomplete="off" placeholder="목표 김프 (예: 3, -0.5)" aria-label="목표 김프(%)">
+            <button type="submit" class="alert-add-btn">추가</button>
+          </form>
+          <ul id="kimchi-alert-list" class="alert-list"></ul>
+        </div>
+
+        <div class="info-card glass-panel tool-card">
+          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-whale"/></svg> 고래 알림 <span class="info-unit">BTC 대형 체결</span></h2>
+          <label class="calc-row whale-alert-row">
+            <span>기준</span>
+            <select id="whale-alert-threshold">
+              <option value="0">끄기</option>
+              <option value="1">1 BTC 이상</option>
+              <option value="3">3 BTC 이상</option>
+              <option value="10">10 BTC 이상</option>
+              <option value="50">50 BTC 이상</option>
+            </select>
+          </label>
+          <p class="tool-note">이 페이지가 열려 있을 때만, 10초에 한 번까지 알려요</p>
+        </div>
+
+        <div class="info-card glass-panel tool-card">
+          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-calculator"/></svg> 환산 계산기</h2>
+          <label class="calc-row"><span>BTC</span><input id="calc-btc" type="text" inputmode="decimal" autocomplete="off"></label>
+          <label class="calc-row"><span>sat</span><input id="calc-sats" type="text" inputmode="numeric" autocomplete="off"></label>
+          <label class="calc-row"><span>원</span><input id="calc-krw" type="text" inputmode="numeric" autocomplete="off"></label>
+          <label class="calc-row"><span>$</span><input id="calc-usd" type="text" inputmode="decimal" autocomplete="off"></label>
+        </div>
+
+        <!-- 읽기 전용 시장·네트워크 정보 -->
+        <div class="info-card glass-panel">
+          <h2 class="info-title" data-help="fee"><svg class="icon" aria-hidden="true"><use href="#i-gauge"/></svg> 추천 수수료 <span class="info-unit">sat/vB</span></h2>
+          <div class="fee-grid">
+            <div><span class="fee-label">빠름</span><strong id="fee-fast">-</strong></div>
+            <div><span class="fee-label">30분</span><strong id="fee-half">-</strong></div>
+            <div><span class="fee-label">1시간</span><strong id="fee-hour">-</strong></div>
+          </div>
+        </div>
+
+        <div class="info-card glass-panel">
+          <h2 class="info-title" data-help="block"><svg class="icon" aria-hidden="true"><use href="#i-cube"/></svg> 최근 블록 <span id="block-time" class="info-unit">-</span></h2>
+          <div class="info-main" id="block-height">-</div>
+          <div class="info-sub"><span id="block-pool">-</span> · <span id="block-txs">-</span></div>
+        </div>
+
+        <div class="info-card glass-panel">
+          <h2 class="info-title" data-help="halving"><svg class="icon" aria-hidden="true"><use href="#i-hourglass"/></svg> 다음 반감기</h2>
+          <div class="info-main" id="halving-days">-</div>
+          <div class="info-sub" id="halving-blocks">-</div>
+        </div>
+
+        <div class="info-card glass-panel">
+          <h2 class="info-title" data-help="difficulty"><svg class="icon" aria-hidden="true"><use href="#i-sliders"/></svg> 난이도 조정 <span id="difficulty-progress" class="info-unit">-</span></h2>
+          <div class="info-main" id="difficulty-change">-</div>
+          <div class="progress-bar"><div id="difficulty-bar" class="progress-fill"></div></div>
+          <div class="info-sub" id="difficulty-sub">-</div>
+        </div>
+
+        <div class="info-card glass-panel">
+          <h2 class="info-title" data-help="mempool"><svg class="icon" aria-hidden="true"><use href="#i-queue"/></svg> 대기 중 거래 <span class="info-unit">멤풀</span></h2>
+          <div class="info-main" id="mempool-count">-</div>
+          <div class="info-sub" id="mempool-blocks">-</div>
+        </div>
+
+        <div class="info-card glass-panel">
+          <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-bars"/></svg> 오늘 시세 <span class="info-unit"><span id="range-coin-label">BTC</span> · 업비트 9시 기준</span></h2>
+          <div class="range-row"><span class="fee-label">고가</span><strong id="krw-high" class="up">-</strong></div>
+          <div class="range-row"><span class="fee-label">저가</span><strong id="krw-low" class="down">-</strong></div>
         </div>
       </aside>
     </div>
