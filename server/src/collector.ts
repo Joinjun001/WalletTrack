@@ -5,7 +5,7 @@
  * - 선물 지표: 펀딩비, 미결제약정, 롱/숏 비율 (FUTURES_INTERVAL_SEC마다)
  * - 김치 프리미엄: 업비트 원화 가격 vs 바이낸스 달러 가격 (KIMCHI_INTERVAL_SEC마다)
  * - 급등·급락: 업비트 원화 마켓 전체 실시간 시세 → 웹과 같은 SurgeDetector (src/surge.ts)
- * - 대형 체결: 여러 거래소 BTC 체결 1 BTC 이상 1분 합계 + 과거 30일 채우기 (bigTrades.ts)
+ * - 대형 체결: 여러 거래소 대형 코인(BTC·ETH·XRP·SOL·DOGE) 큰 체결 1분 합계 + 과거 30일 채우기 (bigTrades.ts)
  */
 
 import { analyzeTransaction, fromMempoolTx } from '../../src/txAnalysis.ts';
@@ -18,6 +18,7 @@ import { config, log } from './config.ts';
 import { dryRun, migrate, query } from './db.ts';
 import { keepStream } from './stream.ts';
 import { addUpbitTradeMessage, collectBigTrades, takeSavedCount } from './bigTrades.ts';
+import { FEED_COINS } from '../../src/exchangeFeeds.ts';
 
 const MEMPOOL_WS = 'wss://mempool.space/api/v1/ws';
 const LIQUIDATION_WS = 'wss://fstream.binance.com/market/ws/!forceOrder@arr';
@@ -183,8 +184,9 @@ async function collectSurges() {
     binary: true,
     onOpen: (ws) => {
       socket = ws;
-      // 같은 연결로 BTC 체결도 받는다 (대형 체결 합계). 업비트는 연결 수를 엄격하게 제한한다
-      ws.send(JSON.stringify([{ ticket: 'wallet-track-collector' }, { type: 'ticker', codes: surgeMarkets }, { type: 'trade', codes: ['KRW-BTC'] }]));
+      // 같은 연결로 대형 코인 체결도 받는다 (대형 체결 합계). 업비트는 연결 수를 엄격하게 제한한다
+      ws.send(JSON.stringify([{ ticket: 'wallet-track-collector' }, { type: 'ticker', codes: surgeMarkets },
+        { type: 'trade', codes: FEED_COINS.map((c) => `KRW-${c}`) }]));
     },
     onMessage: (data) => {
       const t = JSON.parse(data) as { type?: string; code?: string; trade_price?: number; acc_trade_price_24h?: number };

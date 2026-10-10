@@ -39,9 +39,19 @@ const latestTickers = new Map<string, UpbitTicker>(); // 마켓별 마지막 시
 
 const tradeListeners: ((msg: Record<string, unknown>) => void)[] = [];
 
-/** 업비트 KRW-BTC 체결 (대형 체결 피드). 시세와 같은 연결로 받는다 */
-export function onUpbitBtcTrade(fn: (msg: Record<string, unknown>) => void) {
+/** 업비트 원화 마켓 체결 (대형 체결 피드, setUpbitTradeCoins로 고른 코인). 시세와 같은 연결로 받는다 */
+export function onUpbitTrade(fn: (msg: Record<string, unknown>) => void) {
   tradeListeners.push(fn);
+}
+
+let tradeCodes = ['KRW-BTC'];
+
+/** 체결을 받을 코인을 바꾼다. 업비트는 연결 수를 엄격하게 제한해 새로 열지 않고 시세 연결을 다시 연다 */
+export function setUpbitTradeCoins(coins: string[]) {
+  const next = coins.map((c) => `KRW-${c}`);
+  if (next.join(',') === tradeCodes.join(',')) return;
+  tradeCodes = next;
+  reconnectUpbit();
 }
 
 /** 업비트 원화 마켓 시세 수신 (기본 UPBIT_CODES, subscribeUpbitMarkets로 넓힌 마켓 포함) */
@@ -76,6 +86,11 @@ async function fetchUpbitOnce() {
 /** 실시간으로 받을 마켓을 넓힌다 (기본 마켓은 항상 포함). 연결을 새로 연다 */
 export function subscribeUpbitMarkets(markets: string[]) {
   wsCodes = Array.from(new Set([...UPBIT_CODES, ...markets]));
+  reconnectUpbit();
+}
+
+function reconnectUpbit() {
+  if (!upbitWs) return; // 아직 처음 연결 전 (initKrMarket이 연다)
   const old = upbitWs;
   upbitWs = null; // 닫힌 연결이 다시 연결하지 않게
   old?.close();
@@ -89,7 +104,7 @@ function connectUpbitWebSocket() {
   const decoder = new TextDecoder();
 
   ws.onopen = () => {
-    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: wsCodes }, { type: 'trade', codes: ['KRW-BTC'] }]));
+    ws.send(JSON.stringify([{ ticket: 'wallet-track' }, { type: 'ticker', codes: wsCodes }, { type: 'trade', codes: tradeCodes }]));
   };
   ws.onmessage = (event) => {
     try {

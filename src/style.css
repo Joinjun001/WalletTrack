@@ -359,6 +359,13 @@ body {
   gap: 0.6rem;
 }
 
+/* 대형 체결: 코인 버튼은 한 줄, 그 아래 체결 크기 필터 */
+.big-coin-group { flex-basis: 100%; flex-wrap: wrap; }
+.control-bar:has(.big-coin-group) { flex-wrap: nowrap; }
+.control-bar:has(.big-coin-group) .control-right { flex-shrink: 0; } /* 코인 줄 때문에 왼쪽이 넓어져 건수가 아래로 떨어지지 않게 */
+.liq-mode { flex-wrap: wrap; }
+.liq-mode-btn, .big-coin-btn { white-space: nowrap; }
+
 .filter-label {
   font-size: 0.85rem;
   color: var(--text-muted);
@@ -1162,6 +1169,8 @@ body {
   .control-left { flex-wrap: nowrap; overflow-x: auto; gap: 0.4rem; }
   .filter-label { display: none; }
   .threshold-btn { flex-shrink: 0; padding: 0.35rem 0.6rem; font-size: 0.8rem; }
+  /* 대형 체결은 코인 줄이 있어 가로 스크롤 대신 줄바꿈 (필터 글자가 코인마다 길이가 다르다) */
+  .control-left:has(.big-coin-group) { flex-wrap: wrap; overflow-x: visible; }
   .control-right { justify-content: space-between; }
   .live-tx-card { flex-direction: column; align-items: flex-start; gap: 0.75rem; }
   .price-chart { height: 260px; }

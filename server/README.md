@@ -10,7 +10,7 @@ mempool.space / 바이낸스 / 업비트
 
 | 서비스 | 하는 일 |
 |---|---|
-| `collector` | 고래 거래(≥0.1 BTC), 바이낸스 선물 강제청산, 선물 지표(5분), 코인별 김프(1분), 업비트 원화 마켓 급등·급락(실시간 시세 WebSocket), BTC 대형 체결(≥1 BTC) 거래소·1분 합계 저장, 180일 지난 기록 삭제 |
+| `collector` | 고래 거래(≥0.1 BTC), 바이낸스 선물 강제청산, 선물 지표(5분), 코인별 김프(1분), 업비트 원화 마켓 급등·급락(실시간 시세 WebSocket), 대형 코인(BTC·ETH·XRP·SOL·DOGE) 대형 체결 거래소·코인·1분 합계 저장, 180일 지난 기록 삭제 |
 | `api` | 기록 조회 REST API (읽기 전용) |
 | `db` | PostgreSQL 17 (외부 포트 없음) |
 | `caddy` | (선택, `--profile caddy`) 80/443을 쓰는 웹 서버가 없을 때 HTTPS 처리 |
@@ -19,7 +19,7 @@ mempool.space / 바이낸스 / 업비트
 
 거래 분석·김프 계산·급등·급락 판정·체결 해석은 웹과 같은 코드(`../src/txAnalysis.ts`, `../src/market.ts`, `../src/surge.ts`, `../src/exchangeFeeds.ts`, `../src/bigTradeStats.ts`)를 쓴다.
 
-**대형 체결 합계** (`src/bigTrades.ts`): 바이낸스 선물·현물, 바이비트, OKX 체결 스트림과 업비트 체결(급등·급락용 업비트 연결에 함께 구독)을 웹과 같은 방식으로 주문 단위로 묶어, 1 BTC 이상만 거래소·1분 합계로 1분마다 저장한다 (`big_trade_minutes`). 과거 30일은 수집기가 시작 1분 뒤와 6시간마다 거래소 공개 일별 체결 파일(`data.binance.vision`, `public.bybit.com`)로 아직 못 채운 날을 채운다 (`big_trade_filled`에 기록, 파일은 다음 날 올라온다). 업비트는 체결 조회 API로 최근 7일을 처음 한 번만, OKX는 과거 없이 실시간부터. 이미 있는 분은 덮어쓰지 않는다.
+**대형 체결 합계** (`src/bigTrades.ts`): 바이낸스 선물·현물, 바이비트, OKX 체결 스트림과 업비트 체결(급등·급락용 업비트 연결에 함께 구독)을 웹과 같은 방식으로 주문 단위로 묶어, 코인별 최소 수량(1 BTC, 30 ETH, 6만 XRP, 700 SOL, 100만 DOGE — `../src/bigTradeStats.ts`의 `BIG_TRADE_MIN`) 이상만 거래소·코인·1분 합계로 1분마다 저장한다 (`big_trade_minutes`, 코인은 `symbol` 열). 과거 30일은 수집기가 시작 1분 뒤와 6시간마다 거래소 공개 일별 체결 파일(`data.binance.vision`, `public.bybit.com`)로 아직 못 채운 날을 채운다 (`big_trade_filled`에 기록, 파일은 다음 날 올라온다). 업비트는 체결 조회 API로 최근 7일을 처음 한 번만, OKX는 과거 없이 실시간부터. 이미 있는 분은 덮어쓰지 않는다.
 
 ## API
 
@@ -32,7 +32,7 @@ mempool.space / 바이낸스 / 업비트
 | `GET /api/futures?symbol=BTCUSDT&hours=24` | 펀딩비·미결제약정·롱 비율 추이 |
 | `GET /api/kimchi?symbol=BTC&hours=24` | 김프 추이 |
 | `GET /api/surges?threshold=3&hours=24&limit=50` | 업비트 원화 마켓 급등·급락 기록, 최신순 (threshold = 2·3·5·10%) |
-| `GET /api/big-trades/summary?hours=24` | BTC 대형 체결(≥1 BTC) 매수·매도 합계·건수, `until`(합계에 들어간 마지막 시각 = 저장이 확실히 끝난 2분 전 분 경계, 웹이 그 뒤 체결을 실시간으로 더함) (hours 1~744, 캐시 1시간 10초·그 외 1분), 거래소별 기록 시작 시각(`since`), 아직 못 채운 날(`missingDays`) |
+| `GET /api/big-trades/summary?hours=24[&symbol=BTC]` | 대형 체결 매수·매도 합계(`buyBtc`·`sellBtc`, 이름과 달리 값은 symbol 코인 수량)·건수 (symbol: BTC·ETH·XRP·SOL·DOGE, 기본 BTC), `until`(합계에 들어간 마지막 시각 = 저장이 확실히 끝난 2분 전 분 경계, 웹이 그 뒤 체결을 실시간으로 더함) (hours 1~744, 캐시 1시간 10초·그 외 1분), 거래소별 기록 시작 시각(`since`), 아직 못 채운 날(`missingDays`) |
 | `GET /api/liquidations/by-symbol?hours=24&limit=10` | 코인별 청산 합계 순위 |
 | `GET /api/whales/flow?hours=24` | 고래 거래 입금·출금·전송 합계 |
 | `GET /api/liquidations/buckets?symbol=BTCUSDT&hours=50&minutes=15` | 캔들 구간별 롱·숏 청산 합계 (가격 차트 표시) |

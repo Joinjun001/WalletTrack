@@ -236,13 +236,13 @@ function initWhaleAlert() {
 
   let lastNotifiedAt = 0;
   onBtcTrade((t) => {
-    if (!(threshold > 0) || t.btc < threshold) return;
+    if (!(threshold > 0) || t.qty < threshold) return;
     const now = Date.now();
     if (now - lastNotifiedAt < WHALE_ALERT_GAP_MS) return;
     lastNotifiedAt = now;
-    const krw = prices.krwBtc > 0 ? ` (약 ${formatKrw(t.btc * prices.krwBtc)})` : '';
+    const krw = prices.krwBtc > 0 ? ` (약 ${formatKrw(t.qty * prices.krwBtc)})` : '';
     track('whale_alert_fired', { btc: threshold });
-    notify('고래 체결', `${EXCHANGE_LABELS[t.exchange]} ${t.btc.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC ${t.side === 'buy' ? '매수' : '매도'}${krw}`);
+    notify('고래 체결', `${EXCHANGE_LABELS[t.exchange]} ${t.qty.toLocaleString('ko-KR', { maximumFractionDigits: 2 })} BTC ${t.side === 'buy' ? '매수' : '매도'}${krw}`);
   });
 }
 

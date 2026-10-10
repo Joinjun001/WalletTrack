@@ -172,11 +172,18 @@
         <div class="tab-panel" role="tabpanel" data-panel="whale">
           <div class="control-bar glass-panel">
             <div class="control-left">
+              <div class="interval-group big-coin-group" role="group" aria-label="대형 체결 코인">
+                <button type="button" class="interval-btn big-coin-btn active" data-coin="BTC" aria-pressed="true">BTC</button>
+                <button type="button" class="interval-btn big-coin-btn" data-coin="ETH" aria-pressed="false">ETH</button>
+                <button type="button" class="interval-btn big-coin-btn" data-coin="XRP" aria-pressed="false">XRP</button>
+                <button type="button" class="interval-btn big-coin-btn" data-coin="SOL" aria-pressed="false">SOL</button>
+                <button type="button" class="interval-btn big-coin-btn" data-coin="DOGE" aria-pressed="false">DOGE</button>
+              </div>
               <span class="filter-label" data-help="bigTrades">체결 크기:</span>
-              <button class="threshold-btn big-btn active" data-big="1">≥ 1 BTC</button>
-              <button class="threshold-btn big-btn" data-big="5">≥ 5 BTC</button>
-              <button class="threshold-btn big-btn" data-big="10">≥ 10 BTC</button>
-              <button class="threshold-btn big-btn whale-filter" data-big="50"><svg class="icon" aria-hidden="true"><use href="#i-whale"/></svg> ≥ 50 BTC</button>
+              <button class="threshold-btn big-btn active" data-big="1"><span class="big-btn-label">≥ 1 BTC</span></button>
+              <button class="threshold-btn big-btn" data-big="5"><span class="big-btn-label">≥ 5 BTC</span></button>
+              <button class="threshold-btn big-btn" data-big="10"><span class="big-btn-label">≥ 10 BTC</span></button>
+              <button class="threshold-btn big-btn whale-filter" data-big="50"><svg class="icon" aria-hidden="true"><use href="#i-whale"/></svg> <span class="big-btn-label">≥ 50 BTC</span></button>
             </div>
             <div class="control-right">
               <span id="big-count" class="count-tag">0건</span>
@@ -200,7 +207,7 @@
           </div>
 
           <div class="glass-panel liq-card">
-            <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-whale"/></svg> 대형 체결 <span class="info-unit">BTC · 바이낸스 선물·현물 · 바이비트 · OKX · 업비트</span></h2>
+            <h2 class="info-title"><svg class="icon" aria-hidden="true"><use href="#i-whale"/></svg> 대형 체결 <span id="big-feed-unit" class="info-unit">BTC · 바이낸스 선물·현물 · 바이비트 · OKX · 업비트</span></h2>
             <ul id="big-feed" class="liq-feed big-feed">
               <li class="liq-empty">1 BTC 이상 체결을 기다리는 중... (페이지를 연 뒤부터 모아요)</li>
             </ul>
@@ -286,7 +293,11 @@
             <div class="liq-head">
               <h2 class="info-title" data-help="liquidations"><svg class="icon" aria-hidden="true"><use href="#i-flame"/></svg> 실시간 강제청산 <span id="liq-feed-unit" class="info-unit">BTC · 바이낸스·바이비트·OKX · $1K 이상</span></h2>
               <div class="interval-group liq-mode" role="group" aria-label="청산 보기">
-                <button type="button" class="interval-btn liq-mode-btn active" data-mode="btc" aria-pressed="true">BTC</button>
+                <button type="button" class="interval-btn liq-mode-btn active" data-mode="BTC" aria-pressed="true">BTC</button>
+                <button type="button" class="interval-btn liq-mode-btn" data-mode="ETH" aria-pressed="false">ETH</button>
+                <button type="button" class="interval-btn liq-mode-btn" data-mode="XRP" aria-pressed="false">XRP</button>
+                <button type="button" class="interval-btn liq-mode-btn" data-mode="SOL" aria-pressed="false">SOL</button>
+                <button type="button" class="interval-btn liq-mode-btn" data-mode="DOGE" aria-pressed="false">DOGE</button>
                 <button type="button" class="interval-btn liq-mode-btn" data-mode="all" aria-pressed="false">전체 코인</button>
               </div>
               <div class="liq-totals">

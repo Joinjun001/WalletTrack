@@ -387,7 +387,7 @@ function registerSoundEvents() {
     // 기존 BTC 체결은 수량만 있으므로 현재 BTC 가격으로 달러 환산한다.
     // usdBtc가 아직 없을 수 있어 그 경우는 해당 초기 체결만 건너뛴다.
     if (!(prices.usdBtc > 0)) return;
-    const usd = event.btc * prices.usdBtc;
+    const usd = event.qty * prices.usdBtc;
     if (usd < settings.trade.thresholdUsd) return;
     play(event.side === 'buy', tradeSoundTier(usd, settings.trade.thresholdUsd));
     showLastEvent(`BTC 대형 ${event.side === 'buy' ? '매수' : '매도'} · ${formatUsdShort(usd)}`);

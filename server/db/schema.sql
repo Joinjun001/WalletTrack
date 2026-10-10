@@ -58,23 +58,43 @@ CREATE TABLE IF NOT EXISTS surge_events (
 );
 CREATE INDEX IF NOT EXISTS surge_events_threshold_time ON surge_events (threshold, detected_at DESC);
 
--- 대형 체결(1 BTC 이상, 주문 단위) 거래소·분별 합계 (bigTrades.ts). 고래 체결 탭의 하루·1주·1달 합계
+-- 대형 체결(코인별 최소 수량 이상, 주문 단위) 거래소·코인·분별 합계 (bigTrades.ts). 대형 체결 탭의 하루·1주·1달 합계
 CREATE TABLE IF NOT EXISTS big_trade_minutes (
   minute     timestamptz NOT NULL,
   exchange   text NOT NULL,              -- src/exchangeFeeds.ts Exchange
-  buy_btc    double precision NOT NULL,  -- 시장가 매수
+  symbol     text NOT NULL DEFAULT 'BTC', -- src/exchangeFeeds.ts FeedCoin
+  buy_btc    double precision NOT NULL,  -- 시장가 매수 수량 (BTC만 모으던 때의 이름 그대로, 값은 symbol 수량)
   sell_btc   double precision NOT NULL,
   buy_count  int NOT NULL,
   sell_count int NOT NULL,
-  PRIMARY KEY (minute, exchange)
+  PRIMARY KEY (minute, exchange, symbol)
 );
 
--- 실시간 수집을 시작한 시각 (수집기를 켤 때마다). 처음 시작 전인데 파일로 못 채운 날 = 비어 있는 날
+-- 실시간 수집을 시작한 시각 (수집기를 켤 때마다, 코인별). 처음 시작 전인데 파일로 못 채운 날 = 비어 있는 날
 CREATE TABLE IF NOT EXISTS big_trade_live (
-  started_at timestamptz PRIMARY KEY
+  started_at timestamptz NOT NULL,
+  symbol     text NOT NULL DEFAULT 'BTC',
+  PRIMARY KEY (started_at, symbol)
 );
 
--- 거래소 과거 파일로 채운 날 (같은 날을 다시 받지 않게)
+-- 2026-10-10 BTC만 모으던 표를 코인별로 넓힌다 (예전 행은 BTC)
+ALTER TABLE big_trade_minutes ADD COLUMN IF NOT EXISTS symbol text NOT NULL DEFAULT 'BTC';
+ALTER TABLE big_trade_live ADD COLUMN IF NOT EXISTS symbol text NOT NULL DEFAULT 'BTC';
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage
+                 WHERE table_name = 'big_trade_minutes' AND constraint_name = 'big_trade_minutes_pkey' AND column_name = 'symbol') THEN
+    ALTER TABLE big_trade_minutes DROP CONSTRAINT big_trade_minutes_pkey;
+    ALTER TABLE big_trade_minutes ADD PRIMARY KEY (minute, exchange, symbol);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.key_column_usage
+                 WHERE table_name = 'big_trade_live' AND constraint_name = 'big_trade_live_pkey' AND column_name = 'symbol') THEN
+    ALTER TABLE big_trade_live DROP CONSTRAINT big_trade_live_pkey;
+    ALTER TABLE big_trade_live ADD PRIMARY KEY (started_at, symbol);
+  END IF;
+END $$;
+
+-- 거래소 과거 파일로 채운 날 (같은 날을 다시 받지 않게). source: 'bybit'(BTC), 'bybit:ETH'(그 밖의 코인)
 CREATE TABLE IF NOT EXISTS big_trade_filled (
   source text NOT NULL,
   day    date NOT NULL,

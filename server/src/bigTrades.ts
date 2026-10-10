@@ -1,5 +1,6 @@
 /**
- * 대형 체결(1 BTC 이상) 1분 합계 수집 — 고래 체결 탭의 하루·1주·1달 합계용 (big_trade_minutes 테이블).
+ * 대형 체결 1분 합계 수집 — 대형 체결 탭의 하루·1주·1달 합계용 (big_trade_minutes 테이블).
+ * 대형 코인(src/exchangeFeeds.ts FEED_COINS)마다 코인별 최소 수량(src/bigTradeStats.ts BIG_TRADE_MIN) 이상 주문만 더한다.
  *
  * - 실시간: 바이낸스 선물·현물, 바이비트, OKX 체결 스트림 + 업비트(수집기의 업비트 연결에 함께 구독).
  *   웹과 같은 TradeMerger로 주문 단위로 묶고, 1분 합계만 1분에 한 번 저장한다.
@@ -12,8 +13,8 @@
 import { Readable } from 'node:stream';
 import { createGunzip, createInflateRaw } from 'node:zlib';
 import { createInterface } from 'node:readline';
-import { parseBinanceAggTrade, parseBybitTrades, parseOkxTrades, parseUpbitTrade, TradeMerger } from '../../src/exchangeFeeds.ts';
-import type { Fill } from '../../src/exchangeFeeds.ts';
+import { FEED_COINS, parseBinanceAggTrade, parseBybitTrades, parseOkxTrades, parseUpbitTrade, TradeMerger } from '../../src/exchangeFeeds.ts';
+import type { FeedCoin, Fill } from '../../src/exchangeFeeds.ts';
 import { MinuteSums, parseBinanceAggTradeCsv, parseBybitCsv, parseUpbitTick } from '../../src/bigTradeStats.ts';
 import type { MinuteRow } from '../../src/bigTradeStats.ts';
 import { log } from './config.ts';
@@ -58,11 +59,11 @@ async function saveRows(rows: MinuteRow[], mode: 'add' | 'keep') {
          buy_count = big_trade_minutes.buy_count + excluded.buy_count, sell_count = big_trade_minutes.sell_count + excluded.sell_count`
     : 'DO NOTHING';
   await query(
-    `INSERT INTO big_trade_minutes (minute, exchange, buy_btc, sell_btc, buy_count, sell_count)
-     SELECT to_timestamp(m / 1000.0), e, b, s, bc, sc
-     FROM unnest($1::float8[], $2::text[], $3::float8[], $4::float8[], $5::int[], $6::int[]) AS t(m, e, b, s, bc, sc)
-     ON CONFLICT (minute, exchange) ${onConflict}`,
-    [rows.map((r) => r.minute), rows.map((r) => r.exchange), rows.map((r) => r.buyBtc), rows.map((r) => r.sellBtc),
+    `INSERT INTO big_trade_minutes (minute, exchange, symbol, buy_btc, sell_btc, buy_count, sell_count)
+     SELECT to_timestamp(m / 1000.0), e, c, b, s, bc, sc
+     FROM unnest($1::float8[], $2::text[], $3::text[], $4::float8[], $5::float8[], $6::int[], $7::int[]) AS t(m, e, c, b, s, bc, sc)
+     ON CONFLICT (minute, exchange, symbol) ${onConflict}`,
+    [rows.map((r) => r.minute), rows.map((r) => r.exchange), rows.map((r) => r.coin), rows.map((r) => r.buyQty), rows.map((r) => r.sellQty),
       rows.map((r) => r.buyCount), rows.map((r) => r.sellCount)]
   );
 }
@@ -88,16 +89,18 @@ function tradeStream(name: string, url: string, onMessage: (data: string) => voi
 }
 
 export function collectBigTrades() {
-  tradeStream('바이낸스 선물 체결', 'wss://fstream.binance.com/market/ws/btcusdt@aggTrade',
+  // 바이낸스는 묶음 스트림(/stream?streams=a/b) 하나로 모든 코인을 받는다 (메시지는 data 안에 온다)
+  const binanceStreams = FEED_COINS.map((c) => `${c.toLowerCase()}usdt@aggTrade`).join('/');
+  tradeStream('바이낸스 선물 체결', `wss://fstream.binance.com/market/stream?streams=${binanceStreams}`,
     (data) => addLiveFill(parseBinanceAggTrade(JSON.parse(data), 'binance-futures')));
-  tradeStream('바이낸스 현물 체결', 'wss://stream.binance.com:9443/ws/btcusdt@aggTrade',
+  tradeStream('바이낸스 현물 체결', `wss://stream.binance.com:9443/stream?streams=${binanceStreams}`,
     (data) => addLiveFill(parseBinanceAggTrade(JSON.parse(data), 'binance-spot')));
   tradeStream('바이비트 체결', 'wss://stream.bybit.com/v5/public/linear',
     (data) => parseBybitTrades(JSON.parse(data)).forEach(addLiveFill),
-    { op: 'subscribe', args: ['publicTrade.BTCUSDT'] }, { message: '{"op":"ping"}', ms: 20_000 });
+    { op: 'subscribe', args: FEED_COINS.map((c) => `publicTrade.${c}USDT`) }, { message: '{"op":"ping"}', ms: 20_000 });
   tradeStream('OKX 체결', 'wss://ws.okx.com:8443/ws/v5/public',
     (data) => parseOkxTrades(JSON.parse(data)).forEach(addLiveFill),
-    { op: 'subscribe', args: [{ channel: 'trades', instId: 'BTC-USDT-SWAP' }] }, { message: 'ping', ms: 25_000 });
+    { op: 'subscribe', args: FEED_COINS.map((c) => ({ channel: 'trades', instId: `${c}-USDT-SWAP` })) }, { message: 'ping', ms: 25_000 });
 
   setInterval(() => liveMerger.flushIdle(Date.now()), MERGE_MS * 5);
   setInterval(async () => {
@@ -111,7 +114,8 @@ export function collectBigTrades() {
   }, SAVE_MS);
 
   if (!dryRun) {
-    query(`INSERT INTO big_trade_live (started_at) VALUES (to_timestamp($1 / 1000.0)) ON CONFLICT DO NOTHING`, [liveFrom])
+    query(`INSERT INTO big_trade_live (started_at, symbol) SELECT to_timestamp($1 / 1000.0), unnest($2::text[]) ON CONFLICT DO NOTHING`,
+      [liveFrom, [...FEED_COINS]])
       .catch((e) => log('대형 체결 시작 시각 저장 실패:', (e as Error).message));
     setTimeout(() => {
       fillHistory();
@@ -131,11 +135,16 @@ export function takeSavedCount(): number {
 
 export type FileSource = 'binance-futures' | 'binance-spot' | 'bybit';
 
-export const FILE_URLS: Record<FileSource, (day: string) => string> = {
-  'binance-futures': (d) => `https://data.binance.vision/data/futures/um/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-${d}.zip`,
-  'binance-spot': (d) => `https://data.binance.vision/data/spot/daily/aggTrades/BTCUSDT/BTCUSDT-aggTrades-${d}.zip`,
-  bybit: (d) => `https://public.bybit.com/trading/BTCUSDT/BTCUSDT${d}.csv.gz`
+export const FILE_URLS: Record<FileSource, (coin: FeedCoin, day: string) => string> = {
+  'binance-futures': (c, d) => `https://data.binance.vision/data/futures/um/daily/aggTrades/${c}USDT/${c}USDT-aggTrades-${d}.zip`,
+  'binance-spot': (c, d) => `https://data.binance.vision/data/spot/daily/aggTrades/${c}USDT/${c}USDT-aggTrades-${d}.zip`,
+  bybit: (c, d) => `https://public.bybit.com/trading/${c}USDT/${c}USDT${d}.csv.gz`
 };
+
+/** big_trade_filled의 source. BTC는 코인별로 넓히기 전 이름 그대로 ('bybit'), 그 밖은 'bybit:ETH' */
+export function filledSource(source: string, coin: FeedCoin): string {
+  return coin === 'BTC' ? source : `${source}:${coin}`;
+}
 
 /** zip 안의 첫 파일(압축 해제 스트림). 바이낸스 파일은 CSV 하나만 들어 있다 */
 function unzipFirst(buf: Buffer): Readable {
@@ -148,8 +157,8 @@ function unzipFirst(buf: Buffer): Readable {
 }
 
 /** 하루치 파일을 받아 1분 합계로. 아직 안 올라왔으면 null */
-async function fileDayRows(source: FileSource, day: string): Promise<MinuteRow[] | null> {
-  const res = await fetch(FILE_URLS[source](day), { signal: AbortSignal.timeout(5 * 60_000) });
+async function fileDayRows(source: FileSource, coin: FeedCoin, day: string): Promise<MinuteRow[] | null> {
+  const res = await fetch(FILE_URLS[source](coin, day), { signal: AbortSignal.timeout(5 * 60_000) });
   if (res.status === 404) return null;
   if (!res.ok || !res.body) throw new Error(`${res.status}`);
   const input = source === 'bybit'
@@ -160,7 +169,7 @@ async function fileDayRows(source: FileSource, day: string): Promise<MinuteRow[]
   const merger = new TradeMerger(MERGE_MS, (t) => sums.add(t));
   let n = 0;
   for await (const line of createInterface({ input, crlfDelay: Infinity })) {
-    const fill = source === 'bybit' ? parseBybitCsv(line) : parseBinanceAggTradeCsv(line, source);
+    const fill = source === 'bybit' ? parseBybitCsv(line, coin) : parseBinanceAggTradeCsv(line, source, coin);
     if (!fill) continue;
     merger.add(fill, fill.ts); // 파일은 시간순이라 체결 시각을 '지금'으로 쓴다
     if (++n % 1000 === 0) merger.flushIdle(fill.ts);
@@ -169,14 +178,16 @@ async function fileDayRows(source: FileSource, day: string): Promise<MinuteRow[]
   return sums.take();
 }
 
-/** 업비트 최근 7일 체결 (조회 API, 하루씩 뒤로 넘기며) */
-async function upbitRows(): Promise<MinuteRow[]> {
-  const fills: Fill[] = [];
+/** 업비트 최근 7일 체결 (조회 API, 하루씩 뒤로 넘기며). 체결이 많은 코인도 메모리가 넘치지 않게 하루씩 합계로 줄인다 */
+async function upbitRows(coin: FeedCoin): Promise<MinuteRow[]> {
   const oldest = Date.now() - UPBIT_DAYS * DAY_MS;
-  for (let daysAgo = 0; daysAgo <= UPBIT_DAYS; daysAgo++) {
+  const sums = new MinuteSums();
+  const merger = new TradeMerger(MERGE_MS, (t) => sums.add(t));
+  for (let daysAgo = UPBIT_DAYS; daysAgo >= 0; daysAgo--) {
+    const fills: Fill[] = [];
     let cursor = '';
     for (;;) {
-      const url = `https://api.upbit.com/v1/trades/ticks?market=KRW-BTC&count=500${daysAgo ? `&days_ago=${daysAgo}` : ''}${cursor ? `&cursor=${cursor}` : ''}`;
+      const url = `https://api.upbit.com/v1/trades/ticks?market=KRW-${coin}&count=500${daysAgo ? `&days_ago=${daysAgo}` : ''}${cursor ? `&cursor=${cursor}` : ''}`;
       const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
       await sleep(UPBIT_GAP_MS);
       if (res.status === 429) {
@@ -186,19 +197,17 @@ async function upbitRows(): Promise<MinuteRow[]> {
       if (!res.ok) throw new Error(`업비트 ${res.status}`);
       const list = (await res.json()) as { timestamp: number; trade_volume: number; ask_bid: string; sequential_id: number }[];
       for (const t of list) {
-        const fill = parseUpbitTick(t);
+        const fill = parseUpbitTick(t, coin);
         if (fill && fill.ts >= oldest) fills.push(fill);
       }
       if (list.length < 500) break;
       cursor = String(list[list.length - 1].sequential_id);
     }
-  }
-  fills.sort((a, b) => a.ts - b.ts);
-  const sums = new MinuteSums();
-  const merger = new TradeMerger(MERGE_MS, (t) => sums.add(t));
-  for (const f of fills) {
-    merger.add(f, f.ts);
-    merger.flushIdle(f.ts);
+    fills.sort((a, b) => a.ts - b.ts);
+    for (const f of fills) {
+      merger.add(f, f.ts);
+      merger.flushIdle(f.ts);
+    }
   }
   merger.flushIdle(Infinity);
   return sums.take();
@@ -222,26 +231,35 @@ async function fillHistory() {
     const today = Math.floor(Date.now() / DAY_MS) * DAY_MS;
     for (let i = HISTORY_DAYS; i >= 1; i--) {
       const day = new Date(today - i * DAY_MS).toISOString().slice(0, 10);
-      for (const source of Object.keys(FILE_URLS) as FileSource[]) {
-        if (await isFilled(source, day)) continue;
-        try {
-          const rows = await fileDayRows(source, day);
-          if (!rows) continue; // 아직 안 올라온 날은 다음 확인 때
-          // 실시간으로 받은 분은 그대로 둔다
-          await saveRows(rows, 'keep');
-          await markFilled(source, day);
-          log(`대형 체결 과거 채우기 ${source} ${day}: ${rows.length}분`);
-        } catch (e) {
-          log(`대형 체결 과거 채우기 ${source} ${day} 실패:`, (e as Error).message);
+      for (const coin of FEED_COINS) {
+        for (const source of Object.keys(FILE_URLS) as FileSource[]) {
+          const key = filledSource(source, coin);
+          if (await isFilled(key, day)) continue;
+          try {
+            const rows = await fileDayRows(source, coin, day);
+            if (!rows) continue; // 아직 안 올라온 날은 다음 확인 때
+            // 실시간으로 받은 분은 그대로 둔다
+            await saveRows(rows, 'keep');
+            await markFilled(key, day);
+            log(`대형 체결 과거 채우기 ${key} ${day}: ${rows.length}분`);
+          } catch (e) {
+            log(`대형 체결 과거 채우기 ${key} ${day} 실패:`, (e as Error).message);
+          }
         }
       }
     }
-    if (!(await isFilled('upbit', '1970-01-01'))) {
-      // 실시간 시작 전 분만 (그 뒤는 실시간 값)
-      const rows = (await upbitRows()).filter((r) => r.minute < liveFrom);
-      await saveRows(rows, 'keep');
-      await markFilled('upbit', '1970-01-01'); // 업비트는 처음 한 번만
-      log(`대형 체결 과거 채우기 업비트 ${UPBIT_DAYS}일: ${rows.length}분`);
+    for (const coin of FEED_COINS) {
+      const key = filledSource('upbit', coin);
+      if (await isFilled(key, '1970-01-01')) continue;
+      try {
+        // 실시간 시작 전 분만 (그 뒤는 실시간 값)
+        const rows = (await upbitRows(coin)).filter((r) => r.minute < liveFrom);
+        await saveRows(rows, 'keep');
+        await markFilled(key, '1970-01-01'); // 업비트는 처음 한 번만
+        log(`대형 체결 과거 채우기 ${key} ${UPBIT_DAYS}일: ${rows.length}분`);
+      } catch (e) {
+        log(`대형 체결 과거 채우기 ${key} 실패:`, (e as Error).message);
+      }
     }
   } catch (e) {
     log('대형 체결 과거 채우기 실패:', (e as Error).message);

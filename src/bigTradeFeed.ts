@@ -1,55 +1,75 @@
 /**
- * 대형 체결 탭: 여러 거래소 BTC 체결 중 큰 주문(1 BTC 이상)을 실시간 피드로 보여 주고,
- * 기간별(1시간·하루·1주·1달) 매수·매도·순매수 합계를 낸다. 합계 = 기록 서버가 모은 1분 합계(server/src/bigTrades.ts,
- * until까지, 1분마다 다시 받음) + until 이후 브라우저가 실시간으로 받은 체결. 그래서 페이지를 열자마자 기간 전체가 보이고
- * 체결이 들어오는 즉시 바뀐다. 서버에 연결할 수 없으면 1시간만 페이지를 연 뒤부터 모은 값으로 보여 준다.
+ * 대형 체결 탭: 여러 거래소 대형 코인(BTC·ETH·XRP·SOL·DOGE) 체결 중 큰 주문을 실시간 피드로 보여 주고,
+ * 기간별(1시간·하루·1주·1달) 매수·매도·순매수 합계를 낸다. 코인은 버튼으로 고르고, 큰 주문 기준은 코인별 최소 수량
+ * (bigTradeStats.ts BIG_TRADE_MIN, BTC 1개 가치 정도)의 1·5·10·50배다.
+ * 합계 = 기록 서버가 모은 1분 합계(server/src/bigTrades.ts, until까지, 1분마다 다시 받음) + until 이후 브라우저가 실시간으로 받은 체결.
+ * 그래서 페이지를 열자마자 기간 전체가 보이고 체결이 들어오는 즉시 바뀐다. 서버에 연결할 수 없으면 1시간만 페이지를 연 뒤부터 모은 값으로 보여 준다.
  */
 
-import { onBtcTrade } from './btcStreams.ts';
-import { EXCHANGE_LABELS } from './exchangeFeeds.ts';
-import type { MergedTrade } from './exchangeFeeds.ts';
+import { onFeedTrade, setExtraTradeCoin } from './btcStreams.ts';
+import { EXCHANGE_LABELS, isFeedCoin } from './exchangeFeeds.ts';
+import type { FeedCoin, MergedTrade } from './exchangeFeeds.ts';
+import { BIG_TRADE_MIN } from './bigTradeStats.ts';
 import { prices } from './priceStore.ts';
+import { usdQuote } from './binanceSpot.ts';
+import { onUpbitTicker } from './krMarket.ts';
+import { coinName } from './coins.ts';
 import { formatKrwShort, formatUsdShort } from './market.ts';
 import { setSelectedCoin } from './selectedCoin.ts';
 import { track } from './analytics.ts';
 import { getHistory } from './historyApi.ts';
 import type { BigTradeSummary } from './historyApi.ts';
 
-const MIN_BTC = 1;            // 가장 낮은 필터. 이 이상은 모두 모아 둔다
-const WHALE_BTC = 10;         // 이 이상은 강조
+const STEPS = [1, 5, 10, 50];  // 코인별 최소 수량의 배수 (필터 버튼)
+const WHALE_STEP = 10;         // 이 배수 이상은 강조
 const SUMMARY_MS = 60 * 60 * 1000;
 const MAX_STORED = 500;
 const MAX_SHOWN = 60;
-const FILTERS = [1, 5, 10, 50];
-const FILTER_KEY = 'wallettrack.bigTradeBtc';
+const STEP_KEY = 'wallettrack.bigTradeBtc'; // 배수. 예전 BTC 필터 값(1·5·10·50)과 같아서 그대로 이어 쓴다
+const COIN_KEY = 'wallettrack.bigTradeCoin';
 const FLOW_PERIODS = [1, 24, 168, 720]; // 시간
 const SERVER_REFRESH_MS = 60_000;
-const SERVER_UNIT = '1 BTC 이상 · 5개 거래소';
-const LOCAL_UNIT = '1 BTC 이상 · 페이지를 연 뒤부터 (기록 서버 연결 안 됨)';
 
 interface Item extends MergedTrade {
-  krw: number; // 받은 시점 시세로 환산
+  krw: number; // 받은 시점 시세로 환산 (모르면 0)
   usd: number;
 }
 
-let items: Item[] = []; // 최신이 앞
-let minBtc = MIN_BTC;
+let coin: FeedCoin = 'BTC';
+const itemsByCoin = new Map<FeedCoin, Item[]>(); // 최신이 앞. BTC와 지금 고른 코인만 쌓인다
+let step = 1;
 let flowHours = 1;
 let serverRequest = 0;
-let base: BigTradeSummary | null = null; // 지금 고른 기간의 서버 합계
+let base: BigTradeSummary | null = null; // 지금 고른 코인·기간의 서버 합계
 let serverFailed = false;
+const krwPrices = new Map<string, number>(); // 업비트 원화 시세 (BTC 외 코인 환산용)
 
-function formatBtc(btc: number): string {
-  return `${btc.toLocaleString('ko-KR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BTC`;
+const items = (): Item[] => itemsByCoin.get(coin) ?? [];
+const minQty = () => BIG_TRADE_MIN[coin] * step;
+
+/** 6만, 3.5만, 3,500 (필터 버튼·안내 문구용) */
+function shortQty(n: number): string {
+  return n >= 10_000 ? `${(n / 10_000).toLocaleString('ko-KR', { maximumFractionDigits: 1 })}만` : n.toLocaleString('ko-KR');
+}
+
+/** 1,000개 이상은 정수로 (XRP·DOGE, 한 달 합계) */
+function formatQty(qty: number, c: FeedCoin = coin): string {
+  const digits = Math.abs(qty) >= 1000 ? 0 : 2;
+  return `${qty.toLocaleString('ko-KR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} ${c}`;
+}
+
+function unitText(local: boolean): string {
+  const min = `${shortQty(BIG_TRADE_MIN[coin])} ${coin} 이상`;
+  return local ? `${min} · 페이지를 연 뒤부터 (기록 서버 연결 안 됨)` : `${min} · 5개 거래소`;
 }
 
 function itemHtml(t: Item): string {
   const time = new Date(t.ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
   const value = [t.krw > 0 ? `≈${formatKrwShort(t.krw)}` : '', t.usd > 0 ? formatUsdShort(t.usd) : ''].filter(Boolean).join(' · ');
   return `
-    <li class="big-item ${t.side}${t.btc >= WHALE_BTC ? ' whale' : ''}" title="누르면 비트코인 차트로">
+    <li class="big-item ${t.side}${t.qty >= BIG_TRADE_MIN[t.coin] * WHALE_STEP ? ' whale' : ''}" title="누르면 ${coinName(t.coin)} 차트로">
       <span class="big-side">${t.side === 'buy' ? '매수' : '매도'}</span>
-      <span class="big-btc">${formatBtc(t.btc)}</span>
+      <span class="big-btc">${formatQty(t.qty, t.coin)}</span>
       <span class="big-value">${value}</span>
       <span class="big-exchange">${EXCHANGE_LABELS[t.exchange]}</span>
       <span class="liq-time">${time}</span>
@@ -57,20 +77,20 @@ function itemHtml(t: Item): string {
 }
 
 function emptyHtml(): string {
-  return `<li class="liq-empty">${minBtc} BTC 이상 체결을 기다리는 중... (페이지를 연 뒤부터 모아요)</li>`;
+  return `<li class="liq-empty">${shortQty(minQty())} ${coin} 이상 체결을 기다리는 중... (페이지를 연 뒤부터 모아요)</li>`;
 }
 
 function renderList() {
   const list = document.getElementById('big-feed');
   if (!list) return;
-  const shown = items.filter((t) => t.btc >= minBtc).slice(0, MAX_SHOWN);
+  const shown = items().filter((t) => t.qty >= minQty()).slice(0, MAX_SHOWN);
   list.innerHTML = shown.length ? shown.map(itemHtml).join('') : emptyHtml();
   renderCount();
 }
 
 function renderCount() {
   const count = document.getElementById('big-count');
-  if (count) count.textContent = `${items.filter((t) => t.btc >= minBtc).length}건`;
+  if (count) count.textContent = `${items().filter((t) => t.qty >= minQty()).length}건`;
 }
 
 function setText(id: string, text: string) {
@@ -95,25 +115,19 @@ function renderSums(buy: number | null, sell: number | null) {
     return;
   }
   const net = buy - sell;
-  set('big-buy', formatSumBtc(buy));
-  set('big-sell', formatSumBtc(sell));
-  set('big-net', `${net >= 0 ? '+' : ''}${formatSumBtc(net)}`, net);
+  set('big-buy', formatQty(buy));
+  set('big-sell', formatQty(sell));
+  set('big-net', `${net >= 0 ? '+' : ''}${formatQty(net)}`, net);
 }
 
-/** 합계용: 1달이면 수백만 BTC라 1,000 BTC 이상은 정수로 */
-function formatSumBtc(btc: number): string {
-  const digits = Math.abs(btc) >= 1000 ? 0 : 2;
-  return `${btc.toLocaleString('ko-KR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} BTC`;
-}
-
-/** since 이후 브라우저가 받은 체결 합계 */
+/** since 이후 브라우저가 받은 체결 합계 (서버와 같은 기준: 코인별 최소 수량 이상) */
 function liveSums(since: number): { buy: number; sell: number } {
   let buy = 0;
   let sell = 0;
-  for (const t of items) {
+  for (const t of items()) {
     if (t.ts < since) continue; // 거래소마다 시각이 조금씩 달라 순서가 완전히 맞지는 않는다
-    if (t.side === 'buy') buy += t.btc;
-    else sell += t.btc;
+    if (t.side === 'buy') buy += t.qty;
+    else sell += t.qty;
   }
   return { buy, sell };
 }
@@ -153,72 +167,131 @@ function coverageNote(s: BigTradeSummary): string {
   return short.join(' · ');
 }
 
-/** 고른 기간의 서버 합계를 받는다 (1분마다 다시) */
+/** 고른 코인·기간의 서버 합계를 받는다 (1분마다 다시) */
 async function loadServerSummary() {
   const request = ++serverRequest;
   const hours = flowHours;
-  const s = await getHistory<BigTradeSummary>(`/big-trades/summary?hours=${hours}`);
-  if (request !== serverRequest || hours !== flowHours) return; // 그 사이 기간이 바뀌었다
+  const c = coin;
+  const s = await getHistory<BigTradeSummary>(`/big-trades/summary?hours=${hours}&symbol=${c}`);
+  if (request !== serverRequest || hours !== flowHours || c !== coin) return; // 그 사이 코인·기간이 바뀌었다
   serverFailed = !s;
   base = s;
-  setText('big-flow-unit', s || hours !== 1 ? SERVER_UNIT : LOCAL_UNIT);
+  setText('big-flow-unit', unitText(!s && hours === 1));
   setText('big-flow-note', s ? coverageNote(s) : '기록 서버에 연결할 수 없어요');
   renderSummary();
 }
 
-function selectFlowPeriod(hours: number) {
-  flowHours = hours;
+function resetSummary() {
   base = null;
-  document.querySelectorAll<HTMLButtonElement>('.flow-period-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.flowHours) === hours));
   setText('big-flow-note', '');
   renderSummary();
   loadServerSummary();
 }
 
-function onTrade(t: MergedTrade) {
-  if (t.btc < MIN_BTC) return;
-  const item: Item = { ...t, krw: t.btc * prices.krwBtc, usd: t.btc * prices.usdBtc };
-  items.unshift(item);
-  if (items.length > MAX_STORED) items.length = MAX_STORED;
-  renderSummary();
-  if (t.btc < minBtc) return;
+function selectFlowPeriod(hours: number) {
+  flowHours = hours;
+  document.querySelectorAll<HTMLButtonElement>('.flow-period-btn').forEach((b) => b.classList.toggle('active', Number(b.dataset.flowHours) === hours));
+  resetSummary();
+}
 
-  const list = document.getElementById('big-feed');
-  if (!list) return;
-  list.querySelector('.liq-empty')?.remove();
-  list.insertAdjacentHTML('afterbegin', itemHtml(item));
-  while (list.children.length > MAX_SHOWN) list.lastElementChild?.remove();
+/** 필터 버튼 글자: "≥ 30 ETH" */
+function renderStepButtons() {
+  document.querySelectorAll<HTMLButtonElement>('.big-btn').forEach((btn) => {
+    const s = Number(btn.dataset.big);
+    btn.classList.toggle('active', s === step);
+    const label = btn.querySelector('.big-btn-label');
+    if (label) label.textContent = `≥ ${shortQty(BIG_TRADE_MIN[coin] * s)} ${coin}`;
+  });
+}
+
+function selectCoin(next: FeedCoin) {
+  coin = next;
+  // BTC는 항상 받으므로 남겨 두고, 그 밖의 코인은 연결을 바꾸면서 비운다
+  for (const c of itemsByCoin.keys()) if (c !== 'BTC' && c !== next) itemsByCoin.delete(c);
+  setExtraTradeCoin(next);
+  document.querySelectorAll<HTMLButtonElement>('.big-coin-btn').forEach((b) => {
+    const on = b.dataset.coin === next;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-pressed', String(on));
+  });
+  setText('big-feed-unit', `${next} · 바이낸스 선물·현물 · 바이비트 · OKX · 업비트`);
+  setText('big-flow-unit', unitText(false));
+  renderStepButtons();
+  renderList();
+  resetSummary();
+}
+
+function krwPrice(c: FeedCoin): number {
+  return c === 'BTC' ? prices.krwBtc : krwPrices.get(`KRW-${c}`) ?? 0;
+}
+
+function usdPrice(c: FeedCoin): number {
+  return c === 'BTC' ? prices.usdBtc : usdQuote(c)?.price ?? 0;
+}
+
+function onTrade(t: MergedTrade) {
+  if (t.qty < BIG_TRADE_MIN[t.coin] || (t.coin !== 'BTC' && t.coin !== coin)) return;
+  const item: Item = { ...t, krw: t.qty * krwPrice(t.coin), usd: t.qty * usdPrice(t.coin) };
+  let list = itemsByCoin.get(t.coin);
+  if (!list) itemsByCoin.set(t.coin, (list = []));
+  list.unshift(item);
+  if (list.length > MAX_STORED) list.length = MAX_STORED;
+  if (t.coin !== coin) return;
+  renderSummary();
+  if (t.qty < minQty()) return;
+
+  const feed = document.getElementById('big-feed');
+  if (!feed) return;
+  feed.querySelector('.liq-empty')?.remove();
+  feed.insertAdjacentHTML('afterbegin', itemHtml(item));
+  while (feed.children.length > MAX_SHOWN) feed.lastElementChild?.remove();
   renderCount();
+}
+
+function save(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 시크릿 모드 등: 이번 방문 동안만 유지
+  }
 }
 
 export function initBigTradeFeed() {
   try {
-    const saved = Number(localStorage.getItem(FILTER_KEY));
-    if (FILTERS.includes(saved)) minBtc = saved;
+    const savedStep = Number(localStorage.getItem(STEP_KEY));
+    if (STEPS.includes(savedStep)) step = savedStep;
+    const savedCoin = localStorage.getItem(COIN_KEY);
+    if (isFeedCoin(savedCoin)) coin = savedCoin;
   } catch {
     // 저장된 값이 없으면 기본값
   }
-  const buttons = document.querySelectorAll<HTMLButtonElement>('.big-btn');
-  buttons.forEach((btn) => {
-    btn.classList.toggle('active', Number(btn.dataset.big) === minBtc);
+  onUpbitTicker((market, t) => krwPrices.set(market, t.trade_price));
+
+  document.querySelectorAll<HTMLButtonElement>('.big-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const next = Number(btn.dataset.big);
-      if (!FILTERS.includes(next) || next === minBtc) return;
-      minBtc = next;
-      buttons.forEach((b) => b.classList.toggle('active', b === btn));
-      try {
-        localStorage.setItem(FILTER_KEY, String(next));
-      } catch {
-        // 시크릿 모드 등: 이번 방문 동안만 유지
-      }
+      if (!STEPS.includes(next) || next === step) return;
+      step = next;
+      save(STEP_KEY, String(next));
+      renderStepButtons();
       renderList();
-      track('big_trade_filter', { btc: next });
+      track('big_trade_filter', { step: next, coin });
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>('.big-coin-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const next = btn.dataset.coin;
+      if (!isFeedCoin(next) || next === coin) return;
+      save(COIN_KEY, next);
+      selectCoin(next);
+      track('big_trade_coin', { coin: next });
     });
   });
 
   document.getElementById('big-feed')?.addEventListener('click', (e) => {
     if (!(e.target as HTMLElement).closest('.big-item')) return;
-    setSelectedCoin('BTC');
+    setSelectedCoin(coin);
     document.querySelector('.chart-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   });
 
@@ -231,10 +304,8 @@ export function initBigTradeFeed() {
     });
   });
 
-  renderList();
-  renderSummary();
-  loadServerSummary();
-  onBtcTrade(onTrade);
+  selectCoin(coin);
+  onFeedTrade(onTrade);
   setInterval(renderSummary, 30_000); // 서버가 안 될 때: 1시간이 지난 체결을 합계에서 뺀다
   setInterval(loadServerSummary, SERVER_REFRESH_MS);
 }
