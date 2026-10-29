@@ -71,6 +71,25 @@ export async function saveEvents(body: unknown): Promise<{ saved: number }> {
   return { saved: names.length };
 }
 
+/** 최근 2분 접속자 계산용 상태. 같은 30분 방문은 한 session_id를 계속 쓴다. */
+export async function savePresence(body: unknown): Promise<{ active: boolean }> {
+  const b = (body ?? {}) as { v?: unknown; s?: unknown; active?: unknown };
+  const visitor = requireId(b.v, 'visitor id');
+  const session = requireId(b.s, 'session id');
+  const active = b.active === true;
+  if (active) {
+    await query(
+      `INSERT INTO visitor_presence (session_id, visitor_id, last_seen)
+       VALUES ($1, $2, now())
+       ON CONFLICT (session_id) DO UPDATE SET visitor_id = EXCLUDED.visitor_id, last_seen = now()`,
+      [session, visitor]
+    );
+  } else {
+    await query(`DELETE FROM visitor_presence WHERE session_id = $1 AND visitor_id = $2`, [session, visitor]);
+  }
+  return { active };
+}
+
 export async function saveFeedback(body: unknown): Promise<{ ok: true }> {
   const b = (body ?? {}) as { v?: unknown; category?: unknown; message?: unknown; context?: unknown };
   const visitor = requireId(b.v, 'visitor id');

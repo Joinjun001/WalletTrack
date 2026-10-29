@@ -221,6 +221,7 @@ async function deleteOldRows() {
     for (const [table, column] of tables) {
       await query(`DELETE FROM ${table} WHERE ${column} < now() - $1::int * interval '1 day'`, [config.retentionDays]);
     }
+    await query(`DELETE FROM visitor_presence WHERE last_seen < now() - interval '1 day'`);
   } catch (e) {
     log('오래된 기록 정리 실패:', (e as Error).message);
   }

@@ -40,11 +40,12 @@ mempool.space / 바이낸스 / 업비트
 | `GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...]` | 업비트 캔들 중계 (`to` 이전 200개, 차트 과거 불러오기). `unit`: `minutes/1·3·5·15·30·60·240`, `days`, `weeks`, `months` |
 | `GET /api/upbit/tickers` | 업비트 원화 마켓 전체 시세 중계 |
 | `GET /api/upbit/markets` | 업비트 원화 마켓 목록·한글 이름 중계 |
-| `GET /api/usage/visitors` | 오늘(KST)·전체 익명 순 방문자 수 |
+| `GET /api/usage/visitors` | 현재 접속(최근 2분)·오늘 30분 방문 세션·오늘/전체 익명 순 방문자 수 |
 | `POST /api/events` | 웹 익명 사용 기록 (1분에 120번까지) |
+| `POST /api/presence` | 현재 접속 heartbeat (30초마다, 보이지 않으면 즉시 해제) |
 | `POST /api/feedback` | 사이트 "의견 보내기" (10분에 5번까지) |
 
-사용 기록은 브라우저마다 만든 무작위 ID로만 구분하고 IP 등 개인정보는 저장하지 않는다 (`usage_events`, 180일 보관). 의견은 `feedback`에 기한 없이 보관한다. 분석 쿼리는 `db/usage-queries.sql`.
+사용 기록은 브라우저마다 만든 무작위 ID로만 구분하고 IP 등 개인정보는 저장하지 않는다. 같은 브라우저의 새로고침·여러 탭은 마지막 활동부터 30분 동안 한 방문 세션으로 묶는다. 이벤트는 `usage_events`에 180일 보관하고, 현재 접속 상태는 `visitor_presence`에서 최근 2분 값만 센다. 의견은 `feedback`에 기한 없이 보관한다. 분석 쿼리는 `db/usage-queries.sql`.
 
 시각은 모두 밀리초 타임스탬프. 기간이 길면(1일 초과) 평균을 내서 점 개수를 줄인다.
 

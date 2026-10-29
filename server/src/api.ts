@@ -2,7 +2,7 @@
  * 읽기 전용 기록 API. 웹은 처음 열 때 여기서 지난 기록을 받고, 이후 실시간 데이터는 지금처럼 거래소에서 직접 받는다.
  *
  * GET /api/health                              수집 상태 (테이블별 마지막 저장 시각)
- * GET /api/usage/visitors                      오늘/전체 익명 순 방문자 수(KST)
+ * GET /api/usage/visitors                      현재 접속·오늘 방문·오늘/전체 익명 순 방문자 수(KST)
  * GET /api/whales?hours=24&minBtc=0.1&limit=300
  * GET /api/liquidations?hours=24&minUsd=1000&limit=40[&symbol=BTCUSDT,ETHUSDT]   symbol은 쉼표로 최대 5개
  * GET /api/liquidations/summary?hours=24[&symbol=BTCUSDT,ETHUSDT]
@@ -16,7 +16,7 @@
  * GET /api/big-trades/summary?hours=24[&symbol=BTC]                   대형 체결 매수·매도 합계(until까지, 코인 수량)와 거래소별 기록 시작 시각. symbol: BTC·ETH·XRP·SOL·DOGE
  * GET /api/upbit/candles?unit=minutes/15&market=KRW-BTC&count=200[&to=...], /api/upbit/tickers, /api/upbit/markets: 업비트 중계 (upbitProxy.ts)
  *
- * POST /api/events, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts). config.postOrigins에서 보낸 것만 받는다
+ * POST /api/events, /api/presence, /api/feedback: 웹 사용 기록(익명)과 의견 받기 (usage.ts). config.postOrigins에서 보낸 것만 받는다
  *
  * 남용 방지: 조회는 IP별 1분 300회, 업비트 중계는 1분 120회(업비트가 우리 서버 IP를 막지 않게), 구간 합계는 점 5,000개까지.
  */
@@ -25,7 +25,7 @@ import { createServer } from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import { config, log } from './config.ts';
 import { query } from './db.ts';
-import { BadRequest, rateLimiter, saveEvents, saveFeedback } from './usage.ts';
+import { BadRequest, rateLimiter, saveEvents, saveFeedback, savePresence } from './usage.ts';
 import { UpstreamError, upbitCandles, upbitMarkets, upbitTickers } from './upbitProxy.ts';
 import { FILE_URLS, filledSource } from './bigTrades.ts';
 import { isFeedCoin } from '../../src/exchangeFeeds.ts';
@@ -102,14 +102,23 @@ const routes: Record<string, (q: Params) => Promise<unknown>> = {
   },
 
   '/api/usage/visitors': async () => {
-    const [row] = await query<{ total: number; today: number }>(`
+    const [row] = await query<{ total: number; today: number; today_visits: number; online: number }>(`
       SELECT count(DISTINCT visitor_id)::int AS total,
              count(DISTINCT visitor_id) FILTER (
                WHERE created_at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul')
-             )::int AS today
-      FROM usage_events
-      WHERE name = 'page_view'`);
-    return { total: row?.total ?? 0, today: row?.today ?? 0, timezone: 'Asia/Seoul' };
+             )::int AS today,
+             count(DISTINCT session_id) FILTER (
+               WHERE created_at >= (date_trunc('day', now() AT TIME ZONE 'Asia/Seoul') AT TIME ZONE 'Asia/Seoul')
+             )::int AS today_visits,
+             (SELECT count(*)::int FROM visitor_presence WHERE last_seen > now() - interval '2 minutes') AS online
+      FROM usage_events WHERE name = 'page_view'`);
+    return {
+      total: row?.total ?? 0,
+      today: row?.today ?? 0,
+      todayVisits: row?.today_visits ?? 0,
+      online: row?.online ?? 0,
+      timezone: 'Asia/Seoul'
+    };
   },
 
   '/api/whales': async (q) => {
@@ -328,6 +337,7 @@ const allowUpbit = rateLimiter(120, 60_000); // 업비트 중계는 캐시를 �
 
 const postRoutes: Record<string, { handle: (body: unknown) => Promise<unknown>; allow: (key: string) => boolean }> = {
   '/api/events': { handle: saveEvents, allow: rateLimiter(120, 60_000) },       // 1분에 120번
+  '/api/presence': { handle: savePresence, allow: rateLimiter(10, 60_000) },   // 30초 heartbeat + 열기/닫기
   '/api/feedback': { handle: saveFeedback, allow: rateLimiter(5, 10 * 60_000) } // 10분에 5번
 };
 

@@ -114,6 +114,15 @@ CREATE TABLE IF NOT EXISTS usage_events (
 CREATE INDEX IF NOT EXISTS usage_events_created_at ON usage_events (created_at DESC);
 CREATE INDEX IF NOT EXISTS usage_events_name ON usage_events (name, created_at DESC);
 
+-- 현재 접속 상태. 브라우저가 보이는 동안 30초마다 갱신하고, 2분 이내 값만 온라인으로 센다
+CREATE TABLE IF NOT EXISTS visitor_presence (
+  session_id text PRIMARY KEY,
+  visitor_id text NOT NULL,
+  first_seen timestamptz NOT NULL DEFAULT now(),
+  last_seen  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS visitor_presence_last_seen ON visitor_presence (last_seen DESC);
+
 -- 사이트의 "의견 보내기"로 받은 글 (보관 기간 제한 없음)
 CREATE TABLE IF NOT EXISTS feedback (
   id         bigserial PRIMARY KEY,

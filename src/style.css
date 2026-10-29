@@ -1694,6 +1694,7 @@ body {
 
 .visitor-stats {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
   margin-right: auto;
   color: var(--text-muted);

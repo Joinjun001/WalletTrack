@@ -8,10 +8,14 @@
 import { HISTORY_API } from './historyApi.ts';
 
 const VISITOR_KEY = 'wallettrack.vid';
+const SESSION_KEY = 'wallettrack.sid';
+const SESSION_SEEN_KEY = 'wallettrack.sessionSeen';
 const FIRST_VISIT_KEY = 'wallettrack.firstVisit';
 const VISIT_COUNT_KEY = 'wallettrack.visits';
 const OPT_OUT_KEY = 'wallettrack.analyticsOff';
 const FLUSH_MS = 10 * 1000;
+const PRESENCE_MS = 30 * 1000;
+const SESSION_TTL_MS = 30 * 60 * 1000;
 const MAX_QUEUE = 20;
 const MAX_ERRORS = 10; // 같은 오류가 반복돼도 세션당 이만큼만
 
@@ -22,7 +26,7 @@ let queue: { n: string; p: Props; t: number }[] = [];
 const onceKeys = new Set<string>();
 let errorCount = 0;
 let visitorId = '';
-const sessionId = randomId();
+const sessionId = currentSessionId();
 const startedAt = Date.now();
 let visibleMs = 0;
 let visibleSince: number | null = null;
@@ -51,6 +55,21 @@ function storageSet(key: string, value: string) {
   }
 }
 
+/** 새로고침·여러 탭은 30분 동안 한 번의 방문으로 묶는다. */
+function currentSessionId(): string {
+  const now = Date.now();
+  const saved = storageGet(SESSION_KEY);
+  const seen = Number(storageGet(SESSION_SEEN_KEY)) || 0;
+  const id = saved && now - seen < SESSION_TTL_MS ? saved : randomId();
+  storageSet(SESSION_KEY, id);
+  storageSet(SESSION_SEEN_KEY, String(now));
+  return id;
+}
+
+function touchSession() {
+  storageSet(SESSION_SEEN_KEY, String(Date.now()));
+}
+
 function doNotTrack(): boolean {
   const nav = navigator as Navigator & { globalPrivacyControl?: boolean };
   return nav.doNotTrack === '1' || nav.globalPrivacyControl === true;
@@ -69,6 +88,7 @@ export function setAnalyticsEnabled(enabled: boolean) {
   if (!enabled) {
     track('analytics_off');
     flush(true); // 끈다는 기록까지만 보내고 멈춘다
+    sendPresence(false);
     queue = [];
   }
   storageSet(OPT_OUT_KEY, enabled ? '0' : '1');
@@ -106,6 +126,16 @@ function flush(leaving: boolean) {
   if (leaving && navigator.sendBeacon?.(url, new Blob([body], { type: 'text/plain' }))) return;
   fetch(url, { method: 'POST', body, keepalive: true }).catch(() => {
     // 기록 서버가 꺼져 있으면 버린다
+  });
+}
+
+function sendPresence(active: boolean) {
+  if (active && !isAnalyticsEnabled()) return;
+  const body = JSON.stringify({ v: getVisitorId(), s: sessionId, active });
+  const url = `${HISTORY_API}/presence`;
+  if (!active && navigator.sendBeacon?.(url, new Blob([body], { type: 'text/plain' }))) return;
+  fetch(url, { method: 'POST', body, keepalive: true }).catch(() => {
+    // 기록 서버가 꺼져 있으면 다음 heartbeat에서 다시 시도한다.
   });
 }
 
@@ -173,17 +203,23 @@ function updateVisibleTime() {
 interface VisitorCounts {
   total: number;
   today: number;
+  todayVisits: number;
+  online: number;
 }
 
 async function loadVisitorCounts() {
   const today = document.getElementById('visitor-today');
+  const todayVisits = document.getElementById('visitor-today-visits');
+  const online = document.getElementById('visitor-online');
   const total = document.getElementById('visitor-total');
-  if (!today || !total) return;
+  if (!today || !todayVisits || !online || !total) return;
   try {
     const res = await fetch(`${HISTORY_API}/usage/visitors`, { signal: AbortSignal.timeout(5000) });
     if (!res.ok) return;
     const data = await res.json() as VisitorCounts;
     today.textContent = Number(data.today || 0).toLocaleString('ko-KR');
+    todayVisits.textContent = Number(data.todayVisits || 0).toLocaleString('ko-KR');
+    online.textContent = Number(data.online || 0).toLocaleString('ko-KR');
     total.textContent = Number(data.total || 0).toLocaleString('ko-KR');
   } catch {
     // 통계 서버가 잠시 꺼져 있어도 본 기능에는 영향이 없다.
@@ -193,8 +229,18 @@ async function loadVisitorCounts() {
 export function initAnalytics() {
   visibleSince = document.visibilityState === 'visible' ? Date.now() : null;
   trackPageView();
+  touchSession();
+  flush(false); // 첫 방문은 바로 저장해서 통계 반영이 10초 늦지 않게 한다.
+  sendPresence(document.visibilityState === 'visible');
   loadVisitorCounts();
+  setTimeout(loadVisitorCounts, 2_000);
   setInterval(loadVisitorCounts, 60_000);
+  setInterval(() => {
+    if (document.visibilityState === 'visible') {
+      touchSession();
+      sendPresence(true);
+    }
+  }, PRESENCE_MS);
 
   addEventListener('error', (e) => trackError(e.message || 'error', e.filename || '', e.lineno || 0));
   addEventListener('unhandledrejection', (e) => {
@@ -210,6 +256,10 @@ export function initAnalytics() {
       // 모바일은 페이지를 닫을 때 pagehide가 오지 않을 수 있어 숨겨질 때마다 머문 시간을 남긴다
       track('page_hide', { duration_s: Math.round((Date.now() - startedAt) / 1000), visible_s: Math.round(visibleMs / 1000) });
       flush(true);
+      sendPresence(false);
+    } else {
+      touchSession();
+      sendPresence(true);
     }
   });
   setInterval(() => flush(false), FLUSH_MS);
