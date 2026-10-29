@@ -25,7 +25,7 @@
 | 소리·화면 알림 | 관심 코인을 최대 5개 골라 강제청산·대형체결을 소리로, 가격·김프·고래 체결은 브라우저 알림으로 |
 | 시세와 차트 | 업비트 원화 마켓 전체 시세, 코인별 김치 프리미엄, 급등·급락 포착, 1분~월봉 캔들 차트. 기록 서버 장애 때는 Vercel 중계로 자동 전환 |
 | 선물 지표 | 펀딩비, 미결제약정, 롱/숏 비율과 추이 |
-| 익명 방문 통계 | 현재 접속, 오늘 30분 방문 세션, 오늘·누적 순 방문자 수. IP·개인정보는 저장하지 않음 |
+| 익명 방문 통계 | 현재 접속, 오늘 30분 방문 세션, 오늘·누적 순 방문자 수. Vercel Redis에 따로 저장해 기록 서버 장애와 무관하게 동작하며 IP·개인정보는 저장하지 않음 |
 
 ## 실행하기
 
@@ -42,7 +42,7 @@ npm run dev          # http://localhost:5173
 
 ## 기술 스택
 
-Vite · TypeScript · lightweight-charts · Node.js · PostgreSQL · Docker Compose · Vercel
+Vite · TypeScript · lightweight-charts · Node.js · PostgreSQL · Upstash Redis · Docker Compose · Vercel
 
 ## License
 

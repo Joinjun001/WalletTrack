@@ -13,6 +13,7 @@ const SESSION_SEEN_KEY = 'wallettrack.sessionSeen';
 const FIRST_VISIT_KEY = 'wallettrack.firstVisit';
 const VISIT_COUNT_KEY = 'wallettrack.visits';
 const OPT_OUT_KEY = 'wallettrack.analyticsOff';
+const VISITOR_API = '/api/visitors';
 const FLUSH_MS = 10 * 1000;
 const PRESENCE_MS = 30 * 1000;
 const SESSION_TTL_MS = 30 * 60 * 1000;
@@ -132,10 +133,22 @@ function flush(leaving: boolean) {
 function sendPresence(active: boolean) {
   if (active && !isAnalyticsEnabled()) return;
   const body = JSON.stringify({ v: getVisitorId(), s: sessionId, active });
+  fetch(VISITOR_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {
+    // 방문 통계 저장소가 잠시 꺼져 있으면 다음 heartbeat에서 다시 시도한다.
+  });
   const url = `${HISTORY_API}/presence`;
   if (!active && navigator.sendBeacon?.(url, new Blob([body], { type: 'text/plain' }))) return;
   fetch(url, { method: 'POST', body, keepalive: true }).catch(() => {
     // 기록 서버가 꺼져 있으면 다음 heartbeat에서 다시 시도한다.
+  });
+}
+
+/** 첫 페이지 보기는 중복에 안전한 Redis set에 즉시 남긴다. */
+function recordVisitorPageView() {
+  if (!isAnalyticsEnabled()) return;
+  const body = JSON.stringify({ v: getVisitorId(), s: sessionId, active: true, pageView: true });
+  fetch(VISITOR_API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {
+    // OCI 상세 기록과 별개이므로 한쪽 장애가 다른 쪽에 영향을 주지 않는다.
   });
 }
 
@@ -213,16 +226,19 @@ async function loadVisitorCounts() {
   const online = document.getElementById('visitor-online');
   const total = document.getElementById('visitor-total');
   if (!today || !todayVisits || !online || !total) return;
-  try {
-    const res = await fetch(`${HISTORY_API}/usage/visitors`, { signal: AbortSignal.timeout(5000) });
-    if (!res.ok) return;
-    const data = await res.json() as VisitorCounts;
-    today.textContent = Number(data.today || 0).toLocaleString('ko-KR');
-    todayVisits.textContent = Number(data.todayVisits || 0).toLocaleString('ko-KR');
-    online.textContent = Number(data.online || 0).toLocaleString('ko-KR');
-    total.textContent = Number(data.total || 0).toLocaleString('ko-KR');
-  } catch {
-    // 통계 서버가 잠시 꺼져 있어도 본 기능에는 영향이 없다.
+  for (const url of [VISITOR_API, `${HISTORY_API}/usage/visitors`]) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) continue;
+      const data = await res.json() as VisitorCounts;
+      today.textContent = Number(data.today || 0).toLocaleString('ko-KR');
+      todayVisits.textContent = Number(data.todayVisits || 0).toLocaleString('ko-KR');
+      online.textContent = Number(data.online || 0).toLocaleString('ko-KR');
+      total.textContent = Number(data.total || 0).toLocaleString('ko-KR');
+      return;
+    } catch {
+      // Vercel 저장소가 없거나 OCI가 꺼져 있으면 다음 경로를 시도한다.
+    }
   }
 }
 
@@ -231,6 +247,7 @@ export function initAnalytics() {
   trackPageView();
   touchSession();
   flush(false); // 첫 방문은 바로 저장해서 통계 반영이 10초 늦지 않게 한다.
+  recordVisitorPageView();
   sendPresence(document.visibilityState === 'visible');
   loadVisitorCounts();
   setTimeout(loadVisitorCounts, 2_000);
